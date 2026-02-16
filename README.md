@@ -45,6 +45,16 @@ the module to `Mapper`, go to the root of the module, and run:
 composer install --no-dev
 ```
 
+The module uses [CodeMirror] 6 for the mapping editor with syntax highlighting
+for XML, JSON, and plain text (INI). The editor is bundled as a single JavaScript
+file. To rebuild it from source:
+
+```sh
+cd modules/Mapper
+npm install
+npm run build
+```
+
 - For test
 
 The module includes a comprehensive test suite. Due to Laminas application state
@@ -780,6 +790,7 @@ Copyright
 ---------
 
 - Copyright Daniel Berthereau, 2012-2026 (see [Daniel-KM] on GitLab)
+- Copyright 2011-2026, Marijn Haverbeke & alii (library [CodeMirror], [MIT] license)
 
 This module is a merge and improvement of previous modules [Advanced Resource Template],
 [CopIdRef], [Bulk Import] and various old scripts.
@@ -799,6 +810,7 @@ The merge of modules was implemented for the module [Urify] designed for the
 [installing a module]: https://omeka.org/s/docs/user-manual/modules/
 [Mapper.zip]: https://github.com/Daniel-KM/Omeka-S-module-Mapper/releases
 [module issues]: https://gitlab.com/Daniel-KM/Omeka-S-module-Mapper/issues
+[CodeMirror]: https://codemirror.net
 [Common]: https://gitlab.com/Daniel-KM/Omeka-S-module-Common
 [CeCILL v2.1]: https://www.cecill.info/licences/Licence_CeCILL_V2.1-en.html
 [GNU/GPL]: https://www.gnu.org/licenses/gpl-3.0.html
@@ -807,4 +819,5 @@ The merge of modules was implemented for the module [Urify] designed for the
 [digital library Manioc]: http://www.manioc.org
 [Université des Antilles et de la Guyane]: http://www.univ-ag.fr
 [GitLab]: https://gitlab.com/Daniel-KM
+[MIT]: https://opensource.org/licenses/MIT
 [Daniel-KM]: https://gitlab.com/Daniel-KM "Daniel Berthereau"
