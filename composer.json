@@ -27,29 +27,23 @@
         "daniel-km/omeka-s-module-common": "*"
     },
     "require": {
+        "php": ">=8.1",
         "ext-xml": "*",
         "daniel-km/simple-iso-3166-1": "^0.2",
         "daniel-km/simple-iso-639-3": "^0.2",
-        "hakre/xmlreaderiterator": "^0.1",
         "mtdowling/jmespath.php": "^2.7",
-        "openspout/openspout": "^3.7 || ^4.0",
-        "softcreatr/jsonpath": ">=0.7.6, <0.11"
+        "openspout/openspout": "^4.0",
+        "softcreatr/jsonpath": "^0.10"
     },
     "repositories": [
-        {
-            "type": "package",
-            "package": {
-                "name": "hakre/xmlreaderiterator",
-                "version": "0.1.13",
-                "dist": {
-                    "type": "tar",
-                    "url": "https://github.com/Daniel-KM/XMLReaderIterator/archive/refs/tags/v0.1.13.tar.gz"
-                }
-            }
-        }
     ],
     "replace": {
         "symfony/polyfill-mbstring": "*"
+    },
+    "config": {
+        "platform": {
+            "php": "8.1.0"
+        }
     },
     "autoload": {
         "psr-4": {
