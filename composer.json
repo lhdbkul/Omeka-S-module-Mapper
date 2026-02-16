@@ -35,8 +35,7 @@
         "openspout/openspout": "^4.0",
         "softcreatr/jsonpath": "^0.10"
     },
-    "repositories": [
-    ],
+
     "replace": {
         "symfony/polyfill-mbstring": "*"
     },
@@ -58,9 +57,6 @@
     "scripts": {
     },
     "extra": {
-        "installer-name": "Mapper",
-        "external-assets": {
-            "asset/vendor/codemirror/": "https://codemirror.net/5/codemirror.zip"
-        }
+        "installer-name": "Mapper"
     }
 }

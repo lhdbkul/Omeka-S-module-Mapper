@@ -16,18 +16,9 @@ $translate = $plugins->get('translate');
 $hyperlink = $plugins->get('hyperlink');
 
 $this->headLink()
-    ->appendStylesheet($assetUrl('vendor/codemirror/lib/codemirror.css', 'Mapper'))
-    ->appendStylesheet($assetUrl('vendor/codemirror/addon/hint/show-hint.css', 'Mapper'))
     ->appendStylesheet($assetUrl('css/mapper.css', 'Mapper'));
 $this->headScript()
-    ->appendFile($assetUrl('vendor/codemirror/lib/codemirror.js', 'Mapper'))
-    ->appendFile($assetUrl('vendor/codemirror/addon/display/placeholder.js', 'Mapper'))
-    ->appendFile($assetUrl('vendor/codemirror/addon/edit/matchtags.js', 'Mapper'))
-    ->appendFile($assetUrl('vendor/codemirror/addon/fold/xml-fold.js', 'Mapper'))
-    ->appendFile($assetUrl('vendor/codemirror/addon/hint/show-hint.js', 'Mapper'))
-    ->appendFile($assetUrl('vendor/codemirror/addon/hint/xml-hint.js', 'Mapper'))
-    ->appendFile($assetUrl('vendor/codemirror/mode/xml/xml.js', 'Mapper'))
-    ->appendFile($assetUrl('js/mapper.js', 'Mapper'));
+    ->appendFile($assetUrl('js/codemirror-mapper.js', 'Mapper'));
 
 $this->htmlElement('body')->appendAttribute('class', 'mapper show');
 ?>
