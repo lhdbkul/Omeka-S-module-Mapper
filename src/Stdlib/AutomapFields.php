@@ -518,7 +518,7 @@ class AutomapFields
     {
         return array_map(function ($string) {
             $string = preg_replace(
-                '/[\s\h\v[:blank:][:space:]]+/u',
+                '/\s+/u',
                 ' ',
                 (string) $string
             );

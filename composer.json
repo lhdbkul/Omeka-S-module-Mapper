@@ -32,7 +32,7 @@
         "daniel-km/simple-iso-3166-1": "^0.2",
         "daniel-km/simple-iso-639-3": "^0.2",
         "mtdowling/jmespath.php": "^2.7",
-        "openspout/openspout": "^4.0",
+        "openspout/openspout": "^4.25",
         "softcreatr/jsonpath": "^0.10"
     },
 
