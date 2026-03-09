@@ -1143,15 +1143,21 @@ class Mapper
         if ($fieldType !== 'array' && $fieldType !== 'arrays'
             && $fieldType !== 'string' && $fieldType !== 'strings'
         ) {
-            $datatype = $to['datatype'][0] ?? null;
+            $datatypes = $to['datatype'] ?? [];
+            $datatype = $datatypes[0] ?? null;
             $language = $to['language'] ?? null;
             $isPublic = $to['is_public'] ?? null;
+            $hasMultipleDatatypes = count($datatypes) > 1;
 
-            $results = array_map(function ($v) use ($datatype, $language, $isPublic) {
+            $results = array_map(function ($v) use ($datatypes, $datatype, $hasMultipleDatatypes, $language, $isPublic) {
                 if (is_array($v)) {
                     // Already array format, just add missing metadata.
                     if ($datatype && !isset($v['type'])) {
-                        $v['type'] = $datatype;
+                        if ($hasMultipleDatatypes) {
+                            $v['datatype'] = $datatypes;
+                        } else {
+                            $v['type'] = $datatype;
+                        }
                     }
                     if ($language && !isset($v['@language'])) {
                         $v['@language'] = $language;
@@ -1166,19 +1172,28 @@ class Mapper
                 $stringValue = (string) $v;
                 $result = [];
 
-                // Determine type: use datatype or detect uri/literal.
-                if ($datatype) {
+                // When multiple datatypes are specified, pass
+                // the list as candidates for the processor to
+                // try in order. Don't fix the type yet.
+                if ($hasMultipleDatatypes) {
+                    $result['datatype'] = $datatypes;
+                    $result['@value'] = $stringValue;
+                } elseif ($datatype) {
                     $result['type'] = $datatype;
+                    // Set value in appropriate key based on main type.
+                    $mainType = $this->easyMeta->dataTypeMain($datatype);
+                    if ($mainType === 'resource') {
+                        $result['value_resource_id'] = (int) $stringValue;
+                    } elseif ($mainType === 'uri') {
+                        $result['@id'] = $stringValue;
+                    } else {
+                        $result['@value'] = $stringValue;
+                    }
                 } elseif (filter_var($stringValue, FILTER_VALIDATE_URL)) {
                     $result['type'] = 'uri';
-                } else {
-                    $result['type'] = 'literal';
-                }
-
-                // Set value in appropriate key based on type.
-                if ($result['type'] === 'uri' || str_starts_with($result['type'], 'valuesuggest:')) {
                     $result['@id'] = $stringValue;
                 } else {
+                    $result['type'] = 'literal';
                     $result['@value'] = $stringValue;
                 }
 

@@ -713,6 +713,16 @@ class MapperConfig
 
             $normalized = $this->normalizeMap($map, $options);
 
+            // When the source index (column header) contains qualifiers
+            // like ^^datatype, @language, or §visibility, transfer them
+            // to the target if not already set. This handles the case
+            // where the form sends only the property term as value but
+            // the column header has the full spec.
+            if (is_string($index) && preg_match('/[\^@§]/', $index)) {
+                $sourceSpec = $this->mapNormalizer->parseFieldSpec($index);
+                $normalized = $this->applySourceQualifiers($normalized, $sourceSpec);
+            }
+
             if (!empty($normalized) && is_numeric(key($normalized))) {
                 foreach ($normalized as $item) {
                     $result[] = $item;
@@ -723,6 +733,39 @@ class MapperConfig
         }
 
         return $result;
+    }
+
+    /**
+     * Apply qualifiers from the source spec to the target if missing.
+     */
+    protected function applySourceQualifiers(array $normalized, array $sourceSpec): array
+    {
+        if (!empty($normalized) && is_numeric(key($normalized))) {
+            foreach ($normalized as &$item) {
+                $item = $this->applySourceQualifiersToMap($item, $sourceSpec);
+            }
+            unset($item);
+        } else {
+            $normalized = $this->applySourceQualifiersToMap($normalized, $sourceSpec);
+        }
+        return $normalized;
+    }
+
+    protected function applySourceQualifiersToMap(array $map, array $sourceSpec): array
+    {
+        if (empty($map[self::MAP_TO])) {
+            return $map;
+        }
+        if (!empty($sourceSpec['datatype']) && empty($map[self::MAP_TO]['datatype'])) {
+            $map[self::MAP_TO]['datatype'] = $sourceSpec['datatype'];
+        }
+        if ($sourceSpec['language'] !== null && ($map[self::MAP_TO]['language'] ?? null) === null) {
+            $map[self::MAP_TO]['language'] = $sourceSpec['language'];
+        }
+        if ($sourceSpec['is_public'] !== null && ($map[self::MAP_TO]['is_public'] ?? null) === null) {
+            $map[self::MAP_TO]['is_public'] = $sourceSpec['is_public'];
+        }
+        return $map;
     }
 
     /**
