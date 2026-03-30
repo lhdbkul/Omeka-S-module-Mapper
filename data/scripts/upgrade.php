@@ -327,4 +327,16 @@ if (version_compare((string) $oldVersion, '3.4.2', '<')) {
         $messenger->addSuccess($message);
         $logger->notice($message->getMessage(), $message->getContext());
     }
+
+    // Migrate xslt processor setting from BulkImport to Mapper.
+    $xsltProcessor = $settings->get('bulkimport_xslt_processor');
+    if ($xsltProcessor) {
+        $settings->set('mapper_xslt_processor', $xsltProcessor);
+        $settings->delete('bulkimport_xslt_processor');
+        $message = new PsrMessage(
+            'Migrated xslt processor setting from BulkImport to Mapper.', // @translate
+        );
+        $messenger->addSuccess($message);
+        $logger->notice($message->getMessage(), $message->getContext());
+    }
 }
