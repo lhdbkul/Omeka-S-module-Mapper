@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "796b664ad570e52776eb9941f59ea512",
+    "content-hash": "bbab3829653d9c83b19ad7a5edbe15d0",
     "packages": [
         {
             "name": "daniel-km/simple-iso-3166-1",

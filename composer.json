@@ -35,10 +35,6 @@
         "openspout/openspout": "^4.25",
         "softcreatr/jsonpath": "^0.10"
     },
-
-    "replace": {
-        "symfony/polyfill-mbstring": "*"
-    },
     "config": {
         "platform": {
             "php": "8.1.0"
@@ -54,9 +50,11 @@
             "MapperTest\\": "tests/MapperTest/"
         }
     },
-    "scripts": {
-    },
+    "scripts": {},
     "extra": {
         "installer-name": "Mapper"
+    },
+    "provide": {
+        "symfony/polyfill-mbstring": "*"
     }
 }
