@@ -608,7 +608,11 @@ class Mapper
             if ($type === 'uri' || strpos($type, ':uri') !== false) {
                 return (string) $item->uri() ?: (string) $item->value();
             }
-            return (string) $item->value();
+            // A linked resource has no value, so use its title.
+            $valueResource = $item->valueResource();
+            return $valueResource
+                ? (string) $valueResource->displayTitle()
+                : (string) $item->value();
         }
         if ($item instanceof \DateTime) {
             return $item->format(\DateTime::ATOM);
