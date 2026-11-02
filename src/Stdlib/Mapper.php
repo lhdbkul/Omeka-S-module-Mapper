@@ -1550,12 +1550,25 @@ class Mapper
             return (string) $mod['val'];
         }
 
-        // Build replacements with strict syntax distinction:
-        // - {path} → source data only (PSR-3 style)
-        // - {{ variable }} → context variables only (Twig-style)
-        $replace = [];
+        return $this->renderPattern(
+            $mod,
+            fn (string $path) => $data[$path] ?? '',
+            $fromValue
+        );
+    }
 
-        // First, add all context variables ({{ variable }} format).
+    /**
+     * Render the pattern of a map with the variables and the source data.
+     *
+     * The replacements use a strict syntax: "{path}" for the source data only,
+     * via the lookup, and "{{ variable }}" for the context variables only.
+     *
+     * @param callable $lookup Get the string value of a source path.
+     * @param mixed $checkValue Value used to check that a replacement is done.
+     */
+    protected function renderPattern(array $mod, callable $lookup, $checkValue): ?string
+    {
+        $replace = [];
         foreach ($this->variables as $name => $value) {
             if ($value instanceof DOMNode) {
                 $replace["{{ $name }}"] = (string) $value->nodeValue;
@@ -1564,47 +1577,27 @@ class Mapper
             }
         }
 
-        // Then, add source data replacements ({path} format only).
-        if (!empty($mod['replace']) && $data) {
-            foreach ($mod['replace'] as $wrappedQuery) {
-                // Only process single-brace {path} for data lookup.
-                // Double-brace {{ variable }} uses variables above.
-                if (mb_substr($wrappedQuery, 0, 2) === '{{') {
-                    continue;
-                }
-                // Extract path from {path}.
-                $query = $this->extractPathFromBraces($wrappedQuery);
-                $replace[$wrappedQuery] = $data[$query] ?? '';
+        // When all the source data replacements are empty, skip the value
+        // (semi-strict mode). A pattern made only of variables is kept.
+        $hasDataReplacement = false;
+        $allEmpty = true;
+        foreach ($mod['replace'] ?? [] as $wrappedQuery) {
+            if (mb_substr($wrappedQuery, 0, 2) === '{{') {
+                continue;
+            }
+            $hasDataReplacement = true;
+            $value = $lookup($this->extractPathFromBraces($wrappedQuery));
+            $replace[$wrappedQuery] = is_array($value) ? (string) reset($value) : (string) $value;
+            if (strlen($replace[$wrappedQuery])) {
+                $allEmpty = false;
             }
         }
-
-        // Check if all source data replacements are empty (semi-strict mode).
-        // If so, skip this value entirely. This only applies to single-brace
-        // {path} data lookups: a pattern made only of {{ variable }} (with no
-        // data path) must not be skipped, since the variables are resolved
-        // above.
-        if (!empty($mod['replace'])) {
-            $hasDataReplacement = false;
-            $allEmpty = true;
-            foreach ($mod['replace'] as $wrappedQuery) {
-                if (mb_substr($wrappedQuery, 0, 2) === '{{') {
-                    continue; // Skip context variables.
-                }
-                $hasDataReplacement = true;
-                if (isset($replace[$wrappedQuery]) && strlen($replace[$wrappedQuery])) {
-                    $allEmpty = false;
-                    break;
-                }
-            }
-            if ($hasDataReplacement && $allEmpty) {
-                return null;
-            }
+        if ($hasDataReplacement && $allEmpty) {
+            return null;
         }
 
-        // Apply simple replacements.
         $result = strtr($mod['pattern'], $replace);
 
-        // Apply filter expressions.
         if (!empty($mod['filters'])) {
             $result = $this->applyFilters(
                 $result,
@@ -1619,11 +1612,7 @@ class Mapper
         $result = trim($result);
 
         // Verify at least one replacement was made.
-        if (!$this->hasReplacement($fromValue, $result, $mod)) {
-            return null;
-        }
-
-        return $result;
+        return $this->hasReplacement($checkValue, $result, $mod) ? $result : null;
     }
 
     /**
@@ -1710,90 +1699,21 @@ class Mapper
             return (string) $mod['val'];
         }
 
-        // Build replacements with strict syntax distinction:
-        // - {xpath} → XPath query on document (PSR-3 style)
-        // - {{ variable }} → context variables only (Twig-style)
-        $replace = [];
-
-        // First, add all context variables ({{ variable }} format).
-        foreach ($this->variables as $name => $value) {
-            if ($value instanceof DOMNode) {
-                $replace["{{ $name }}"] = (string) $value->nodeValue;
-            } elseif (is_scalar($value)) {
-                $replace["{{ $name }}"] = $value;
-            }
-        }
-
-        // Then, add XPath query replacements ({xpath} format only).
-        if (!empty($mod['replace']) && $doc) {
-            $contextNode = $fromValue instanceof DOMNode ? $fromValue : null;
-            foreach ($mod['replace'] as $wrappedQuery) {
-                // Only process single-brace {xpath} for XPath queries.
-                // Double-brace {{ variable }} uses variables above.
-                if (mb_substr($wrappedQuery, 0, 2) === '{{') {
-                    continue;
+        $contextNode = $fromValue instanceof DOMNode ? $fromValue : null;
+        return $this->renderPattern(
+            $mod,
+            function (string $query) use ($doc, $contextNode): string {
+                $nodes = $doc ? $this->xpathQuery($doc, $query, $contextNode) : [];
+                if (!$nodes) {
+                    return '';
                 }
-                // Extract xpath query from {xpath}.
-                $query = $this->extractPathFromBraces($wrappedQuery);
-                $nodes = $this->xpathQuery($doc, $query, $contextNode);
-                if (!empty($nodes)) {
-                    $firstNode = reset($nodes);
-                    $replace[$wrappedQuery] = $firstNode instanceof DOMNode
-                        ? (string) $firstNode->nodeValue
-                        : (string) $firstNode;
-                } else {
-                    $replace[$wrappedQuery] = '';
-                }
-            }
-        }
-
-        // Check if all source data replacements are empty (semi-strict mode).
-        // If so, skip this value entirely. This only applies to single-brace
-        // {path} data lookups: a pattern made only of {{ variable }} (with no
-        // data path) must not be skipped, since the variables are resolved
-        // above.
-        if (!empty($mod['replace'])) {
-            $hasDataReplacement = false;
-            $allEmpty = true;
-            foreach ($mod['replace'] as $wrappedQuery) {
-                if (mb_substr($wrappedQuery, 0, 2) === '{{') {
-                    continue; // Skip context variables.
-                }
-                $hasDataReplacement = true;
-                if (isset($replace[$wrappedQuery]) && strlen($replace[$wrappedQuery])) {
-                    $allEmpty = false;
-                    break;
-                }
-            }
-            if ($hasDataReplacement && $allEmpty) {
-                return null;
-            }
-        }
-
-        // Apply simple replacements.
-        $result = strtr($mod['pattern'], $replace);
-
-        // Apply filter expressions.
-        if (!empty($mod['filters'])) {
-            $result = $this->applyFilters(
-                $result,
-                $this->variables,
-                $mod['filters'],
-                $mod['filters_has_replace'] ?? [],
-                $replace
-            );
-        }
-
-        // Trim result to avoid leading/trailing whitespace from missing values.
-        $result = trim($result);
-
-        // Verify at least one replacement was made.
-        $checkValue = $fromValue instanceof DOMNode ? (string) $fromValue->nodeValue : $stringValue;
-        if (!$this->hasReplacement($checkValue, $result, $mod)) {
-            return null;
-        }
-
-        return $result;
+                $firstNode = reset($nodes);
+                return $firstNode instanceof DOMNode
+                    ? (string) $firstNode->nodeValue
+                    : (string) $firstNode;
+            },
+            $fromValue instanceof DOMNode ? (string) $fromValue->nodeValue : $stringValue
+        );
     }
 
     /**
