@@ -236,6 +236,16 @@ class MapperConfig
     protected ?string $currentName = null;
 
     /**
+     * Fingerprints of the references or contents of the parsed mappings.
+     *
+     * The same name may be used with another content, for example a mapping
+     * built on the fly, so the mapping is parsed again when it changes.
+     *
+     * @var array<string, string>
+     */
+    protected array $fingerprints = [];
+
+    /**
      * Empty mapping template.
      *
      * Structure:
@@ -303,8 +313,10 @@ class MapperConfig
             return $this->getMapping($name);
         }
 
-        if (!isset($this->mappings[$name])) {
+        $fingerprint = md5(serialize($mappingOrRef));
+        if (!isset($this->mappings[$name]) || ($this->fingerprints[$name] ?? null) !== $fingerprint) {
             $this->parseAndStore($mappingOrRef, $options);
+            $this->fingerprints[$name] = $fingerprint;
         }
 
         return $this->getMapping($name);
