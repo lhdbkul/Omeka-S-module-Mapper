@@ -886,11 +886,12 @@ class MapperConfig
             return $filepath ? $this->loadFileContent($filepath) : null;
         }
 
-        // Check for raw content (INI or XML).
+        // Check for raw content (INI, XML or JSON).
         $trimmed = trim($reference);
         if (strlen($trimmed) > 10 && (
             mb_substr($trimmed, 0, 1) === '<' ||
             mb_substr($trimmed, 0, 1) === '[' ||
+            mb_substr($trimmed, 0, 1) === '{' ||
             strpos($trimmed, ' = ') !== false ||
             strpos($trimmed, "\n") !== false
         )) {
@@ -988,10 +989,10 @@ class MapperConfig
         $data = json_decode($content, true);
         if (json_last_error() !== JSON_ERROR_NONE) {
             $this->logger->err(
-                'Invalid JSON in mapping "{name}": {error}',
+                'Invalid JSON in mapping "{name}": {error}', // @translate
                 ['name' => $this->currentName, 'error' => json_last_error_msg()]
             );
-            return self::EMPTY_MAPPING;
+            return ['has_error' => true] + self::EMPTY_MAPPING;
         }
 
         // JSON can be a full mapping structure or just a list of maps.
@@ -1732,19 +1733,20 @@ class MapperConfig
         $mapping = self::EMPTY_MAPPING;
 
         // Info section is optional (consistent with INI and XML formats).
+        // All info keys are kept, like for ini and xml, for example "context".
         if (isset($input['info']) && is_array($input['info'])) {
-            // Scalar info keys.
-            foreach (['label', 'from', 'to', 'querier', 'mapper', 'example'] as $key) {
-                if (!empty($input['info'][$key]) && is_string($input['info'][$key])) {
-                    $mapping['info'][$key] = $input['info'][$key];
+            foreach ($input['info'] as $key => $value) {
+                if ($key === 'preprocess' || $key === 'postprocess') {
+                    $value = array_values(array_filter(
+                        (array) $value,
+                        fn ($v) => is_string($v) && strlen($v)
+                    ));
+                    if ($value) {
+                        $mapping['info'][$key] = $value;
+                    }
+                } elseif (is_scalar($value) && strlen((string) $value)) {
+                    $mapping['info'][$key] = (string) $value;
                 }
-            }
-            // Array info keys.
-            if (!empty($input['info']['preprocess']) && is_array($input['info']['preprocess'])) {
-                $mapping['info']['preprocess'] = array_values(array_filter(
-                    $input['info']['preprocess'],
-                    fn($v) => is_string($v) && strlen($v)
-                ));
             }
         }
         $mapping['info']['label'] = $mapping['info']['label'] ?? $this->currentName;
