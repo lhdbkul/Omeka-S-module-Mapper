@@ -88,14 +88,15 @@ return [
                                 'options' => [
                                     'route' => '[/:action]',
                                     'constraints' => [
-                                        'action' => 'index|browse|add',
+                                        // The internal mappings use the query id.
+                                        'action' => 'index|browse|add|show|copy',
                                     ],
                                     'defaults' => [
                                         'action' => 'browse',
                                     ],
                                 ],
                                 // Higher priority than 'id' route to match actions first,
-                                // since add, browse and index can be id below.
+                                // since the actions can be id below.
                                 'priority' => 1,
                             ],
                             'id' => [
