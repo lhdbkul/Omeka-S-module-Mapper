@@ -535,7 +535,7 @@ class MapperConfig
         foreach ($filters as $expression) {
             // Extract the expression content: {{ variable|filter }}
             $inner = trim(mb_substr((string) $expression, 3, -3));
-            $parts = array_filter(array_map('trim', explode('|', $inner)));
+            $parts = PatternParser::splitPipes($inner);
 
             if (empty($parts)) {
                 continue;

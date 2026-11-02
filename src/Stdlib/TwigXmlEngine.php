@@ -68,7 +68,8 @@ class TwigXmlEngine
         // Strip {# ... #} comments first (multi-line, non-greedy).
         $template = preg_replace('/\{#.*?#\}/s', '', $template);
         // Capture {% ... %} and {{ ... }} delimiters (single-line content).
-        $pattern = '/(\{%[^%]*%\}|\{\{[^{}]*\}\})/';
+        // The expressions may contain braces, like "replace({'a': 'b'})".
+        $pattern = '/(\{%[^%]*%\}|\{\{.*?\}\})/';
         $parts = preg_split($pattern, $template, -1, PREG_SPLIT_DELIM_CAPTURE);
         $tokens = [];
         foreach ($parts as $part) {
@@ -180,11 +181,21 @@ class TwigXmlEngine
             return '';
         }
         $out = '';
+        $index = 0;
+        $length = count($collection);
         foreach ($collection as $key => $value) {
             $loopCtx = $context;
             $loopCtx[$itemVar] = $value;
-            $loopCtx['loop'] = ['index0' => $key, 'index' => is_int($key) ? $key + 1 : $key];
+            $loopCtx['loop'] = [
+                'index0' => $index,
+                'index' => $index + 1,
+                'key' => $key,
+                'first' => $index === 0,
+                'last' => $index === $length - 1,
+                'length' => $length,
+            ];
             $out .= $this->renderNodes($node['body'], $loopCtx);
+            ++$index;
         }
         return $out;
     }
@@ -194,8 +205,8 @@ class TwigXmlEngine
      */
     protected function evalVar(string $expr, array $context): string
     {
-        $parts = array_map('trim', explode('|', $expr));
-        $name = array_shift($parts);
+        $parts = PatternParser::splitPipes($expr);
+        $name = (string) array_shift($parts);
 
         // Allow string and number literals as the head expression.
         $value = $this->evalLiteral($name);
@@ -207,6 +218,10 @@ class TwigXmlEngine
         foreach ($parts as $filter) {
             if ($filter === 'raw') {
                 $autoEscape = false;
+                continue;
+            }
+            // The value is escaped once at the end.
+            if ($filter === 'e' || $filter === 'escape' || strncmp($filter, 'e(', 2) === 0 || strncmp($filter, 'escape(', 7) === 0) {
                 continue;
             }
             $value = $this->processFilter($value, $filter);

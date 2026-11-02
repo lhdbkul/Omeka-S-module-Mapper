@@ -149,7 +149,7 @@ trait FilterTrait
         foreach ($filters as $expression) {
             $hasReplaceExpr = $hasReplace && !empty($filterHasReplace[$filterKeys[$expression]]);
             $value = '';
-            $parts = array_filter(array_map('trim', explode('|', mb_substr((string) $expression, 3, -3))));
+            $parts = PatternParser::splitPipes(mb_substr((string) $expression, 3, -3));
 
             $isFirst = true;
             foreach ($parts as $part) {

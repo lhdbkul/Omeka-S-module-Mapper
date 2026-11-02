@@ -139,7 +139,7 @@ class PatternParser
 
         // Parse filter chain.
         $filters = [];
-        $parts = explode('|', $filterPart);
+        $parts = self::splitPipes($filterPart);
 
         foreach ($parts as $part) {
             $part = trim($part);
@@ -222,6 +222,46 @@ class PatternParser
         }
 
         return implode('', $parts);
+    }
+
+    /**
+     * Split a filter chain on "|", except inside quotes, parentheses, brackets
+     * and braces, like in "value|replace({'|': ' '})|join('|')".
+     *
+     * @return string[] Trimmed parts, without empty ones.
+     */
+    public static function splitPipes(string $expression): array
+    {
+        $parts = [];
+        $current = '';
+        $depth = 0;
+        $quote = null;
+        $length = strlen($expression);
+        for ($i = 0; $i < $length; $i++) {
+            $char = $expression[$i];
+            if ($quote !== null) {
+                if ($char === '\\' && $i + 1 < $length) {
+                    $current .= $char . $expression[++$i];
+                    continue;
+                }
+                if ($char === $quote) {
+                    $quote = null;
+                }
+            } elseif ($char === '"' || $char === "'") {
+                $quote = $char;
+            } elseif ($char === '(' || $char === '[' || $char === '{') {
+                ++$depth;
+            } elseif ($char === ')' || $char === ']' || $char === '}') {
+                $depth = max(0, $depth - 1);
+            } elseif ($char === '|' && $depth === 0) {
+                $parts[] = trim($current);
+                $current = '';
+                continue;
+            }
+            $current .= $char;
+        }
+        $parts[] = trim($current);
+        return array_values(array_filter($parts, 'strlen'));
     }
 
     /**
