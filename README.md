@@ -18,7 +18,7 @@ This module is used in particular in modules:
 - [Bulk Import] to convert any source (spreadsheet, sql, xml, etc.) into omeka
   resource,
 - [CopIdRef] to create local resource from French authorities [IdRef],
-- [Oai-Pmh Harvester] to convert any source (generally xml) into omeka resource,
+- [OaiPmh Harvester] to convert any source (generally xml) into omeka resource,
 - [Urify] to convert a name into a value suggest uri or to fill a full resource.
 
 
@@ -66,6 +66,14 @@ The module auto-detects an installed processor at install time and stores the
 command in `mapper_xslt_processor`. The configuration page allows overriding
 the detected command. Use `%1$s` (input), `%2$s` (stylesheet), `%3$s` (output),
 unescaped.
+
+The command fails when its exit code is not 0 or when it runs longer than the
+max duration set in the configuration page (ten minutes by default). Its other
+messages, like the warnings of java, are only logged.
+
+The remote xml files are downloaded with a max size (512 MB by default) and a
+max idle duration (60 seconds by default), set in the configuration page too.
+Set 0 to remove a limit, for example for very large EAD or METS files.
 
 Packages by distribution:
 
@@ -149,7 +157,7 @@ Mappings can be written in four equivalent formats:
 | XML    | `.xml`    | Complex mappings, XPath queries, includes     |
 | INI    | `.ini`    | Simple mappings, quick edits, readability     |
 | JSON   | `.json`   | API integration, JavaScript tools             |
-| PHP    | `.php`    | Programmatic generation, PHP integration      |
+| PHP    | `.php`    | Programmatic generation (module files only)   |
 
 **All formats are interchangeable.** They are different representations of the
 same mapping structure. A mapping written in INI can be converted to XML, JSON,
@@ -526,18 +534,51 @@ only `{{ value }}` contains the extracted value.
 | `{{ url_resource }}`| During process| URL of current resource              |
 | `{key}`            | During process | Value from source data               |
 
-#### Common Filters
+#### Filters
 
-| Filter      | Example                          | Result                   |
-|-------------|----------------------------------|--------------------------|
-| `upper`     | `{{ value\|upper }}`             | `HELLO`                  |
-| `lower`     | `{{ value\|lower }}`             | `hello`                  |
-| `trim`      | `{{ value\|trim }}`              | Remove whitespace        |
-| `date`      | `{{ value\|date('Y-m-d') }}`     | `2024-01-15`             |
-| `split`     | `{{ url\|split('/', -1)\|first }}`| First part before `/`   |
-| `first`     | `{{ value\|first }}`             | First element/character  |
-| `last`      | `{{ value\|last }}`              | Last element/character   |
-| `table`     | `{{ value\|table('types') }}`    | Lookup in table          |
+Filters are chained with `|`, like in Twig: `{{ value|trim|upper }}`. A `|`
+inside the arguments, between quotes or brackets, is not a separator, so
+`{{ value|replace({'|': ' / '}) }}` works. The params of the section `[params]`
+use the same filters.
+
+| Filter                   | Example                                       | Result                                          |
+|--------------------------|-----------------------------------------------|-------------------------------------------------|
+| `abs`                    | `{{ value\|abs }}`                            | Absolute value of a number                      |
+| `basename`               | `{{ value\|basename }}`                       | Last part of a path or url                      |
+| `capitalize`             | `{{ value\|capitalize }}`                     | `élan` → `Élan` (first letter only)             |
+| `date`                   | `{{ value\|date('Y-m-d') }}`                  | `2024-01-15` (timestamp without format)         |
+| `dateIso`                | `{{ value\|dateIso }}`                        | Unimarc `d1605110512` → `1605-11-05T12`         |
+| `dateRevert`             | `{{ value\|dateRevert }}`                     | Day/month/year → `yyyy-mm-dd`                   |
+| `dateSql`                | `{{ value\|dateSql }}`                        | Unimarc 005 → `1985-09-01 14:12:36`             |
+| `e`, `escape`            | `{{ value\|e }}`                              | Html escape (once only in Twig-XML)             |
+| `first`                  | `{{ value\|first }}`                          | First element of a list, else first character   |
+| `format`                 | `{{ value\|format('a', 'b') }}`               | `sprintf()` with the value as format            |
+| `join`, `implode`        | `{{ value\|join(', ', {a}, {b}) }}`           | Join the arguments with the first one           |
+| `implodev`               | `{{ value\|implodev(', ', {a}, {b}) }}`       | Same as `join`, skipping empty values           |
+| `isbdName`               | `{{ value\|isbdName({a}, {b}, {c}) }}`        | Name in ISBD format (Unimarc 700 and next)      |
+| `isbdNameColl`           | `{{ value\|isbdNameColl({a}, …) }}`           | Corporate name in ISBD format (Unimarc 710)     |
+| `isbdMark`               | `{{ value\|isbdMark({a}, {b}, {c}) }}`        | Mark in ISBD format (Unimarc 716)               |
+| `last`                   | `{{ value\|last }}`                           | Last element of a list, else last character     |
+| `length`                 | `{{ value\|length }}`                         | Number of elements or characters                |
+| `lower`, `upper`         | `{{ value\|lower }}`                          | `hello`, `HELLO`                                |
+| `replace`                | `{{ value\|replace({'a': 'b'}) }}`            | Replace strings                                 |
+| `slice`                  | `{{ value\|slice(1, 4) }}`                    | Part of a list or of a string                   |
+| `split`                  | `{{ url\|split('/')\|last }}`                 | List; with a limit, see `explode()`             |
+| `striptags`              | `{{ value\|striptags }}`                      | Remove the html tags                            |
+| `table`                  | `{{ value\|table('types') }}`                 | Lookup in a table of the section `[tables]`     |
+| `table_reverse`          | `{{ value\|table_reverse('types') }}`         | Reverse lookup in a table                       |
+| `title`                  | `{{ value\|title }}`                          | `élan vital` → `Élan Vital`                     |
+| `translate`              | `{{ value\|translate }}`                      | Translation of the string in Omeka              |
+| `trim`                   | `{{ value\|trim('/', 'right') }}`             | Remove spaces, or the characters, on a side     |
+| `unimarcIndex`           | `{{ value\|unimarcIndex('…') }}`              | Uri of a Unimarc index (annex G)                |
+| `unimarcCoordinates`     | `{{ value\|unimarcCoordinates }}`             | `w0241207` → `W 24°12'7"`                       |
+| `unimarcCoordinatesHexa` | `{{ value\|unimarcCoordinatesHexa }}`         | Unimarc hexadecimal coordinates                 |
+| `unimarcTimeHexa`        | `{{ value\|unimarcTimeHexa }}`                | `150027` → `15h0m27s`                           |
+| `url_encode`             | `{{ value\|url_encode }}`                     | Url encoded string                              |
+
+With a limit, `split` follows `explode()`: `{{ url|split('/api/', -1)|first }}`
+removes the last part, then keeps the first one, so it outputs the url before
+`/api/`.
 
 ### Section [tables]
 
@@ -707,7 +748,7 @@ Preprocess references can be:
 | Database (by label) | `mapping:My Transform`           | By label (portable)            |
 | Module file         | `module:ead/transform.xsl`       | Module's data/mapping/         |
 | User file           | `user:custom.xsl`                | User's files/mapping/          |
-| Absolute path       | `/path/to/transform.xsl`         | Absolute filesystem path       |
+| Absolute path       | `/path/to/transform.xsl`         | Inside the directories above   |
 
 **Recommended:** Use `mapping:label` instead of `mapping:id` for portability
 between installations.
@@ -723,6 +764,13 @@ For simple filenames (without prefix), files are resolved in this order:
 
 This allows mappings to reference transformations by simple filename when they're
 in the same folder, while shared utilities go in `common/`.
+
+For security, a file reference cannot get out of the directory `data/mapping/`
+of the module or of the directory `files/mapping/` of the user, neither with
+`..` nor with a symbolic link to a file outside of them. An absolute path is
+allowed only inside these directories. The same rules apply to the mappings,
+the preprocess and postprocess files, and the Twig-XML templates. Furthermore,
+a PHP mapping is included only when it is a file of the module.
 
 ### Database storage
 
@@ -779,7 +827,7 @@ symmetric counterpart of `<format>_to_omeka.xml`.
 
 A small XPath-like dialect reads an Omeka representation directly, without
 relying on `jsonSerialize()` (so paths stay stable when the JSON-LD format
-evolves). Full grammar is in `docs/SYNTAX_INI.md`. Most useful paths:
+evolves). Most useful paths:
 
 | Path                                      | Meaning                              |
 |-------------------------------------------|--------------------------------------|
@@ -792,6 +840,7 @@ evolves). Full grammar is in `docs/SYNTAX_INI.md`. Most useful paths:
 | `o:resource_class/o:term`                 | Chained meta                         |
 | `o:item_set/dcterms:title`                | Traversal item → item sets           |
 | `o:media[*]/o:original_url`               | All media URLs                       |
+| `o:site_url`                              | Public URLs of the resource by site  |
 
 ### Writing an export mapping
 
@@ -849,7 +898,8 @@ produce. For these, the recommended pattern is hybrid:
 ```
 
 Postprocess references follow the same resolution rules as preprocess:
-`module:`, `user:`, `mapping:label`, absolute path, or simple filename. The
+`module:`, `user:`, `mapping:label`, absolute path inside the mapping
+directories, or simple filename. The
 chain is applied via the existing XSL processor, so Saxon-HE is used when
 installed (Phase 4 mapping `omeka_to_mods.xml` + `omeka_to_mods.xsl` ships
 as a working example).
@@ -872,9 +922,10 @@ supports a deliberately tiny subset of Twig:
 </oai_dc:dc>
 ```
 
-Supported syntax: `{{ var|filter }}` (auto-escaped for XML, `|raw` to
-bypass), `{% if expr %}/{% else %}/{% endif %}`, `{% for x in coll %}/{% endfor %}`
-(with `loop.index0`/`loop.index`), dot notation `a.b.c`, `{# … #}`
+Supported syntax: `{{ var|filter }}` (auto-escaped once for XML, even with
+`|e`, `|raw` to bypass), `{% if expr %}/{% else %}/{% endif %}`, `{% for x in coll %}/{% endfor %}`
+(with `loop.index0`, `loop.index`, `loop.key`, `loop.first`, `loop.last` and
+`loop.length`), dot notation `a.b.c`, `{# … #}`
 comments. Filters reuse the existing `FilterTrait` (upper, lower, trim,
 escape, table, etc.). The pivot DOM is exposed as a context where each
 property is keyed `prefix_localName` with multi-values wrapped in
@@ -1028,9 +1079,11 @@ The merge of modules was implemented for the module [Urify] designed for the
 [Bulk Import]: https://gitlab.com/Daniel-KM/Omeka-S-module-BulkImport
 [CopIdRef]: https://gitlab.com/Daniel-KM/Omeka-S-module-CopIdRef
 [OaiPmh Harvester]: https://gitlab.com/Daniel-KM/Omeka-S-module-OaiPmhHarvester
+[Urify]: https://gitlab.com/Daniel-KM/Omeka-S-module-Urify
+[IdRef]: https://www.idref.fr
 [installing a module]: https://omeka.org/s/docs/user-manual/modules/
 [Mapper.zip]: https://gitlab.com/Daniel-KM/Omeka-S-module-Mapper/-/releases
-[module issues]: https://gitlab.com/Daniel-KM/Omeka-S-module-Mapper/issues
+[module issues]: https://gitlab.com/Daniel-KM/Omeka-S-module-Mapper/-/work_items
 [CodeMirror]: https://codemirror.net
 [Common]: https://gitlab.com/Daniel-KM/Omeka-S-module-Common
 [CeCILL v2.1]: https://www.cecill.info/licences/Licence_CeCILL_V2.1-en.html
