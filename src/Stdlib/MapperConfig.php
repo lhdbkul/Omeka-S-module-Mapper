@@ -1403,12 +1403,11 @@ class MapperConfig
     /**
      * Find the equals sign separating source from destination in an INI line.
      *
-     * This method correctly handles XPath predicates with "=" inside brackets,
-     * e.g., //datafield[@tag="200"]/subfield[@code="a"] = dcterms:title
+     * The separator is the first "=" outside of brackets and quotes, so the
+     * XPath predicates of the source (//datafield[@tag="200"] = dcterms:title)
+     * and the "=" of the destination, in a pattern or a url, are kept.
      *
      * @return int|false Position of separator "=" or false if not found.
-     *
-     * @todo Clarify the convention to separate left from right.
      */
     protected function findSeparatorEquals(string $line)
     {
@@ -1416,7 +1415,6 @@ class MapperConfig
         $bracketDepth = 0;
         $inSingleQuote = false;
         $inDoubleQuote = false;
-        $lastEqualsOutsideBrackets = false;
 
         for ($i = 0; $i < $length; $i++) {
             $char = mb_substr($line, $i, 1);
@@ -1446,13 +1444,12 @@ class MapperConfig
                 continue;
             }
 
-            // Found "=" outside brackets - this is a potential separator.
             if ($char === '=' && $bracketDepth === 0) {
-                $lastEqualsOutsideBrackets = $i;
+                return $i;
             }
         }
 
-        return $lastEqualsOutsideBrackets;
+        return false;
     }
 
     /**
@@ -1807,7 +1804,7 @@ class MapperConfig
         }
 
         // Ini-style string.
-        $equalsPos = mb_strpos($map, '=');
+        $equalsPos = $this->findSeparatorEquals($map);
         if ($equalsPos === false) {
             return [
                 self::MAP_FROM => isset($options['index']) ? ['index' => $options['index']] : [],
