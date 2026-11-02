@@ -1048,32 +1048,9 @@ class Mapper
             return $this->xpathQuery($data, $path);
         }
 
-        if (!is_array($data)) {
-            return null;
-        }
-
-        switch ($querier) {
-            case 'index':
-                return $data[$path] ?? null;
-
-            case 'jmespath':
-                if ($this->jmesPathEnv) {
-                    return $this->jmesPathEnv->search($path, $data);
-                }
-                return null;
-
-            case 'jsonpath':
-                if ($this->jsonPathQuerier) {
-                    $querier = new \Flow\JSONPath\JSONPath($data);
-                    return $querier->find($path)->getData();
-                }
-                return null;
-
-            case 'jsdot':
-            default:
-                $flatData = $this->flatArray($data);
-                return $flatData[$path] ?? null;
-        }
+        return is_array($data)
+            ? $this->queryArray($data, $path, $querier)
+            : null;
     }
 
     /**
@@ -1379,29 +1356,44 @@ class Mapper
     }
 
     /**
+     * Query array data with a querier (index, jmespath, jsonpath or jsdot).
+     *
+     * @param array|null $flatData The flat data for jsdot, if already prepared.
+     * @return mixed Null when not found or when the querier is unavailable.
+     */
+    protected function queryArray(array $data, string $path, string $querier, ?array $flatData = null)
+    {
+        switch ($querier) {
+            case 'index':
+                return $data[$path] ?? null;
+
+            case 'jmespath':
+                return $this->jmesPathEnv
+                    ? $this->jmesPathEnv->search($path, $data)
+                    : null;
+
+            case 'jsonpath':
+                return $this->jsonPathQuerier
+                    ? (new \Flow\JSONPath\JSONPath($data))->find($path)->getData()
+                    : null;
+
+            case 'jsdot':
+            default:
+                $flatData ??= $this->flatArray($data);
+                return $flatData[$path] ?? null;
+        }
+    }
+
+    /**
      * Extract values from array data using the specified querier.
      */
     protected function extractValuesArray(array $data, array $flatData, array $fields, string $path, string $querier): array
     {
         switch ($querier) {
             case 'jmespath':
-                if ($this->jmesPathEnv) {
-                    $values = $this->jmesPathEnv->search($path, $data);
-                    return $this->normalizeValues($values);
-                }
-                return [];
-
             case 'jsonpath':
-                if ($this->jsonPathQuerier) {
-                    $querier = new \Flow\JSONPath\JSONPath($data);
-                    $values = $querier->find($path)->getData();
-                    return $this->normalizeValues($values);
-                }
-                return [];
-
             case 'index':
-                $values = $data[$path] ?? [];
-                return $this->normalizeValues($values);
+                return $this->normalizeValues($this->queryArray($data, $path, $querier) ?? []);
 
             case 'jsdot':
             default:
@@ -1476,27 +1468,9 @@ class Mapper
         $fromPath = $from['path'] ?? null;
         $fromValue = $this->variables['value'] ?? null;
 
+        // For jsdot, the data are already flat.
         if ($fromPath !== null && $data !== null) {
-            switch ($querier) {
-                case 'index':
-                    $fromValue = $data[$fromPath] ?? $fromValue;
-                    break;
-                case 'jmespath':
-                    if ($this->jmesPathEnv) {
-                        $fromValue = $this->jmesPathEnv->search($fromPath, $data) ?? $fromValue;
-                    }
-                    break;
-                case 'jsonpath':
-                    if ($this->jsonPathQuerier) {
-                        $q = new \Flow\JSONPath\JSONPath($data);
-                        $fromValue = $q->find($fromPath)->getData() ?? $fromValue;
-                    }
-                    break;
-                case 'jsdot':
-                default:
-                    $fromValue = $data[$fromPath] ?? $fromValue;
-                    break;
-            }
+            $fromValue = $this->queryArray($data, $fromPath, $querier, $data) ?? $fromValue;
         }
 
         // No pattern - return value directly.
