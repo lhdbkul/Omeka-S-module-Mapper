@@ -27,6 +27,32 @@ class Mapper
     use FilterTrait;
 
     /**
+     * Methods of the representations for the Omeka metadata of the querier
+     * omeka.
+     */
+    protected const OMEKA_META_METHODS = [
+        'o:id' => 'id',
+        'o:title' => 'title',
+        'o:is_public' => 'isPublic',
+        'o:created' => 'created',
+        'o:modified' => 'modified',
+        'o:resource_class' => 'resourceClass',
+        'o:resource_template' => 'resourceTemplate',
+        'o:owner' => 'owner',
+        'o:item_set' => 'itemSets',
+        'o:media' => 'media',
+        'o:item' => 'item',
+        'o:term' => 'term',
+        'o:label' => 'label',
+        'o:email' => 'email',
+        'o:name' => 'name',
+        'o:original_url' => 'originalUrl',
+        'o:filename' => 'filename',
+        'o:source' => 'source',
+        'o:media_type' => 'mediaType',
+    ];
+
+    /**
      * @var \Omeka\Api\Manager
      */
     protected $api;
@@ -526,50 +552,15 @@ class Mapper
             return [];
         }
 
-        // Omeka meta accessors.
-        switch ($name) {
-            case 'o:id':
-                return method_exists($resource, 'id') ? $resource->id() : null;
-            case 'o:title':
-                return method_exists($resource, 'title') ? $resource->title() : null;
-            case 'o:is_public':
-                return method_exists($resource, 'isPublic') ? $resource->isPublic() : null;
-            case 'o:created':
-                return method_exists($resource, 'created') ? $resource->created() : null;
-            case 'o:modified':
-                return method_exists($resource, 'modified') ? $resource->modified() : null;
-            case 'o:resource_class':
-                return method_exists($resource, 'resourceClass') ? $resource->resourceClass() : null;
-            case 'o:resource_template':
-                return method_exists($resource, 'resourceTemplate') ? $resource->resourceTemplate() : null;
-            case 'o:owner':
-                return method_exists($resource, 'owner') ? $resource->owner() : null;
-            case 'o:item_set':
-                return method_exists($resource, 'itemSets') ? $resource->itemSets() : null;
-            case 'o:media':
-                return method_exists($resource, 'media') ? $resource->media() : null;
-            case 'o:item':
-                return method_exists($resource, 'item') ? $resource->item() : null;
-            case 'o:term':
-                return method_exists($resource, 'term') ? $resource->term() : null;
-            case 'o:label':
-                return method_exists($resource, 'label') ? $resource->label() : null;
-            case 'o:email':
-                return method_exists($resource, 'email') ? $resource->email() : null;
-            case 'o:name':
-                return method_exists($resource, 'name') ? $resource->name() : null;
-            case 'o:original_url':
-                return method_exists($resource, 'originalUrl') ? $resource->originalUrl() : null;
-            case 'o:filename':
-                return method_exists($resource, 'filename') ? $resource->filename() : null;
-            case 'o:source':
-                return method_exists($resource, 'source') ? $resource->source() : null;
-            case 'o:media_type':
-                return method_exists($resource, 'mediaType') ? $resource->mediaType() : null;
-            case 'o:site_url':
-                return $this->siteUrls($resource);
+        if ($name === 'o:site_url') {
+            return $this->siteUrls($resource);
         }
-        return null;
+
+        // Omeka meta accessors.
+        $method = self::OMEKA_META_METHODS[$name] ?? null;
+        return $method && method_exists($resource, $method)
+            ? $resource->$method()
+            : null;
     }
 
     /**
