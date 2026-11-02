@@ -363,36 +363,13 @@ class Mapper
             $value = (string) $value->value();
         }
 
-        if ($value === null) {
-            $value = '';
-        } elseif (!is_scalar($value)) {
-            return '';
-        } else {
-            $value = (string) $value;
-        }
-
-        if (empty($map['mod'])) {
-            return $value;
-        }
-
-        $mod = $map['mod'];
-
-        if (isset($mod['raw'])) {
-            return (string) $mod['raw'];
-        }
-
-        if (isset($mod['val'])) {
-            return (string) $mod['val'];
-        }
-
-        $this->setVariable('value', $value);
-        $result = $this->convertTargetToStringArray(['path' => null], $mod, null, 'value');
-
-        if ($result === null || !strlen($result)) {
+        // Unlike for the import, an empty value is processed, so a raw value
+        // or a pattern may be output.
+        if ($value !== null && !is_scalar($value)) {
             return '';
         }
 
-        return ($mod['prepend'] ?? '') . $result . ($mod['append'] ?? '');
+        return $this->convertString((string) $value, $map);
     }
 
     /**
