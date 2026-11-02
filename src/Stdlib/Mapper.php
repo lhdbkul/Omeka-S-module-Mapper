@@ -1173,9 +1173,11 @@ class Mapper
             return is_string($default) ? $default : null;
         }
 
-        // If the setting is an array, it cannot be converted to a string.
+        // A param prefixed with "~" is a parsed pattern.
         if (is_array($setting)) {
-            return is_string($default) ? $default : null;
+            return isset($setting['pattern'])
+                ? $this->convertTargetToStringArray([], $setting, [], 'index')
+                : (is_string($default) ? $default : null);
         }
 
         // If it's already a simple string without placeholders, return as-is.
@@ -1190,10 +1192,10 @@ class Mapper
             // Add variable replacements ({{ variable }} format).
             foreach ($this->variables as $name => $value) {
                 if (is_scalar($value)) {
-                    $replace["{{ $name }}"] = $value;
-                    $replace["{{$name}}"] = $value;
+                    $replace['{{ ' . $name . ' }}'] = $value;
+                    $replace['{{' . $name . '}}'] = $value;
                     // Also support single-brace {variable} for simple cases.
-                    $replace["{$name}"] = $value;
+                    $replace['{' . $name . '}'] = $value;
                 }
             }
 
