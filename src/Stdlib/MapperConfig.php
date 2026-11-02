@@ -223,6 +223,11 @@ class MapperConfig
     protected $fieldSpecParser;
 
     /**
+     * @var ValueFilter|null
+     */
+    protected $valueFilter;
+
+    /**
      * @var PatternParser
      */
     protected $patternParser;
@@ -471,12 +476,11 @@ class MapperConfig
             }
         }
 
-        // Check for PSR-3 style substitutions {key} which are always dynamic.
-        if (preg_match('/\{[^{}]+\}/', $pattern)) {
-            // If there's a single-brace substitution that's not inside {{ }},
-            // it's a dynamic data reference.
-            $cleanPattern = preg_replace('/\{\{[^}]+\}\}/', '', $pattern);
-            if (preg_match('/\{[^{}]+\}/', $cleanPattern)) {
+        // Substitutions {key} are references to the data, so always dynamic.
+        // They are listed by the pattern parser, that skips the braces of the
+        // filter arguments, like in "replace({'a': 'b'})".
+        foreach ($paramValue['replace'] ?? [] as $replacement) {
+            if (strncmp((string) $replacement, '{{', 2) !== 0) {
                 return false;
             }
         }
@@ -524,8 +528,7 @@ class MapperConfig
     /**
      * Apply simple filters for param evaluation.
      *
-     * This is a simplified version of FilterTrait::applyFilters() that handles
-     * common filters needed for param evaluation.
+     * The filters are the same than the ones of the maps.
      *
      * @param string $result Current result string.
      * @param array $context Variables available.
@@ -548,8 +551,9 @@ class MapperConfig
             $value = $context[$varName] ?? '';
 
             // Apply each filter.
+            $valueFilter = $this->valueFilter ??= new ValueFilter($this->logger, $this);
             foreach ($parts as $filter) {
-                $value = $this->applySimpleFilter($value, $filter);
+                $value = $valueFilter->apply($value, $filter);
             }
 
             // Ensure final value is a string.
@@ -561,102 +565,6 @@ class MapperConfig
             $result = strtr($result, [$expression => (string) $value]);
         }
 
-        return $result;
-    }
-
-    /**
-     * Apply a single filter for param evaluation.
-     *
-     * Only supports filters commonly used in params.
-     *
-     * @param mixed $value The value to filter.
-     * @param string $filter The filter with optional arguments.
-     * @return string|array Filtered value (array for split, string else).
-     */
-    protected function applySimpleFilter($value, string $filter)
-    {
-        $stringValue = is_array($value) ? (string) reset($value) : (string) $value;
-
-        // Parse filter name and arguments.
-        if (preg_match('~\s*(?<function>[a-zA-Z0-9_]+)\s*\(\s*(?<args>.*?)\s*\)\s*~U', $filter, $matches)) {
-            $function = $matches['function'];
-            $args = $matches['args'];
-        } else {
-            $function = $filter;
-            $args = '';
-        }
-
-        switch ($function) {
-            case 'basename':
-                return basename($stringValue);
-
-            case 'first':
-                if (is_array($value)) {
-                    return (string) reset($value);
-                }
-                return mb_substr($stringValue, 0, 1);
-
-            case 'last':
-                if (is_array($value)) {
-                    return (string) end($value);
-                }
-                return mb_substr($stringValue, -1);
-
-            case 'lower':
-                return mb_strtolower($stringValue);
-
-            case 'upper':
-                return mb_strtoupper($stringValue);
-
-            case 'trim':
-                return trim($stringValue);
-
-            case 'split':
-                // Extract arguments.
-                $argList = $this->extractSimpleList($args);
-                $delimiter = $argList[0] ?? '';
-                if (!strlen($delimiter)) {
-                    return $stringValue;
-                }
-                $limit = isset($argList[1]) ? (int) $argList[1] : PHP_INT_MAX;
-                // Return as array for further processing.
-                return explode($delimiter, $stringValue, $limit);
-
-            case 'slice':
-                $argList = $this->extractSimpleList($args);
-                $start = (int) ($argList[0] ?? 0);
-                $length = isset($argList[1]) ? (int) $argList[1] : 1;
-                if (is_array($value)) {
-                    $sliced = array_slice($value, $start, $length);
-                    return (string) reset($sliced);
-                }
-                return mb_substr($stringValue, $start, $length);
-
-            default:
-                return $stringValue;
-        }
-    }
-
-    /**
-     * Extract a simple list of arguments from a string.
-     *
-     * @param string $args Argument string like "'/', -1" or "1, 4".
-     * @return array List of argument values.
-     */
-    protected function extractSimpleList(string $args): array
-    {
-        $result = [];
-        $matches = [];
-        preg_match_all('~"([^"]*)"|\'([^\']*)\'|([+-]?\d+)~', $args, $matches, PREG_SET_ORDER);
-        foreach ($matches as $match) {
-            if (isset($match[3]) && $match[3] !== '') {
-                $result[] = $match[3];
-            } elseif (isset($match[2]) && $match[2] !== '') {
-                $result[] = $match[2];
-            } elseif (isset($match[1])) {
-                $result[] = $match[1];
-            }
-        }
         return $result;
     }
 

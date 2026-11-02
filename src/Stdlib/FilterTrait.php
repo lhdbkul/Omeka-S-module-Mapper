@@ -314,7 +314,7 @@ trait FilterTrait
                 return preg_replace_callback('~(^|\s)(\p{Ll})~u', fn ($m) => $m[1] . mb_strtoupper($m[2]), $stringValue) ?? $stringValue;
 
             case 'translate':
-                return $this->translator->translate($stringValue);
+                return $this->translator ? $this->translator->translate($stringValue) : $stringValue;
 
             case 'trim':
                 $arga = $this->extractList($args);
