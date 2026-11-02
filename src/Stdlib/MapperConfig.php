@@ -1482,48 +1482,12 @@ class MapperConfig
     /**
      * Parse a field specification string.
      *
-     * Format: "dcterms:title ^^datatype @language §visibility"
+     * Format: "dcterms:title ^^datatype @language §visibility".
      */
     protected function parseFieldSpec(string $spec): array
     {
-        $result = [
-            'field' => null,
-            'datatype' => [],
-            'language' => null,
-            'is_public' => null,
-        ];
-
-        $spec = trim($spec);
-        if (!$spec) {
-            return $result;
-        }
-
-        $tildePos = mb_strpos($spec, '~');
-        if ($tildePos !== false) {
-            $spec = trim(mb_substr($spec, 0, $tildePos));
-        }
-
-        $parts = preg_split('/\s+/', $spec);
-        foreach ($parts as $part) {
-            if (mb_substr($part, 0, 2) === '^^') {
-                $result['datatype'][] = mb_substr($part, 2);
-            } elseif (mb_substr($part, 0, 1) === '@') {
-                $result['language'] = mb_substr($part, 1);
-            } elseif (mb_substr($part, 0, 1) === '§') {
-                $visibility = mb_strtolower(mb_substr($part, 1));
-                $result['is_public'] = $visibility !== 'private';
-            } elseif ($result['field'] === null) {
-                $result['field'] = $part;
-            }
-        }
-
-        if ($result['field']) {
-            $propertyId = $this->easyMeta->propertyId($result['field']);
-            if ($propertyId) {
-                $result['property_id'] = $propertyId;
-            }
-        }
-
+        $result = $this->fieldSpecParser->parse($spec);
+        $result['datatype'] = $result['datatype'] ?? [];
         return $result;
     }
 
