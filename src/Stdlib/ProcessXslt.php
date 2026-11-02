@@ -20,6 +20,7 @@ use XsltProcessor;
 
 class ProcessXslt
 {
+
     /**
      * @var Logger
      */
@@ -47,11 +48,25 @@ class ProcessXslt
     protected $originalUrl;
 
     /**
-     * Max duration of the external command, in seconds.
+     * Max duration of the external command, in seconds (0 for no limit).
      *
      * @var int
      */
     protected $timeout = 600;
+
+    /**
+     * Max size of a downloaded file, in bytes (0 for no limit).
+     *
+     * @var int
+     */
+    protected $downloadMaxSize = 536870912;
+
+    /**
+     * Max idle duration of a download, in seconds (0 for the php default).
+     *
+     * @var int
+     */
+    protected $downloadTimeout = 60;
 
     public function __construct(
         Logger $logger,
@@ -285,14 +300,29 @@ class ProcessXslt
         rename($filepath, $filepath . '.xml');
         $filepath .= '.xml';
 
-        $content = @file_get_contents($url);
-        if ($content === false || $content === '') {
-            @unlink($filepath);
-            return null;
+        // Stream the file to avoid to load it in memory, with a limit.
+        $context = stream_context_create($this->downloadTimeout
+            ? ['http' => ['timeout' => $this->downloadTimeout], 'ftp' => ['timeout' => $this->downloadTimeout]]
+            : []);
+        $source = @fopen($url, 'rb', false, $context);
+        $destination = $source ? @fopen($filepath, 'wb') : false;
+        $size = $destination
+            ? stream_copy_to_stream($source, $destination, $this->downloadMaxSize ? $this->downloadMaxSize + 1 : null)
+            : false;
+        if ($source) {
+            fclose($source);
         }
-
-        $result = file_put_contents($filepath, $content);
-        if ($result === false) {
+        if ($destination) {
+            fclose($destination);
+        }
+        $isTooLarge = $this->downloadMaxSize && $size > $this->downloadMaxSize;
+        if (!$size || $isTooLarge) {
+            if ($isTooLarge) {
+                $this->logger->err(
+                    'The file {url} is larger than {size} bytes.', // @translate
+                    ['url' => $url, 'size' => $this->downloadMaxSize]
+                );
+            }
             @unlink($filepath);
             return null;
         }
@@ -399,9 +429,10 @@ class ProcessXslt
 
         $domDocument = new DomDocument();
 
+        // No network access during parsing (external dtd and entities).
         if ($this->isRemote($filepath)) {
-            $xmlContent = @file_get_contents($filepath);
-            if ($xmlContent === false) {
+            $tempFile = $this->downloadToTemp($filepath);
+            if ($tempFile === null) {
                 $errors = $this->getLibxmlErrors();
                 libxml_clear_errors();
                 $message = new PsrMessage(
@@ -411,18 +442,10 @@ class ProcessXslt
                 $this->logger->err($message->getMessage(), $message->getContext());
                 throw new Exception((string) $message);
             }
-            if ($xmlContent === '') {
-                libxml_clear_errors();
-                $message = new PsrMessage(
-                    'The file {filepath} is empty.', // @translate
-                    ['filepath' => $filepath]
-                );
-                $this->logger->err($message->getMessage(), $message->getContext());
-                throw new Exception((string) $message);
-            }
-            $loaded = $domDocument->loadXML($xmlContent, LIBXML_NONET);
+            $loaded = $domDocument->load($tempFile, LIBXML_NONET);
+            @unlink($tempFile);
         } else {
-            $loaded = $domDocument->load($filepath);
+            $loaded = $domDocument->load($filepath, LIBXML_NONET);
         }
 
         if (!$loaded) {
@@ -583,7 +606,7 @@ class ProcessXslt
                 $exitCode = (int) $status['exitcode'];
                 break;
             }
-            if (microtime(true) - $start > $this->timeout) {
+            if ($this->timeout && microtime(true) - $start > $this->timeout) {
                 proc_terminate($process, 9);
                 $timedOut = true;
                 $exitCode = -1;
@@ -663,17 +686,36 @@ class ProcessXslt
     }
 
     /**
-     * Set the max duration of the external command, in seconds.
+     * Set the max duration of the external command, in seconds (0 for none).
      */
     public function setTimeout(int $timeout): self
     {
-        $this->timeout = max(1, $timeout);
+        $this->timeout = max(0, $timeout);
         return $this;
     }
 
     public function getTimeout(): int
     {
         return $this->timeout;
+    }
+
+    /**
+     * Set the limits of the downloads: max size in bytes (0 for none) and max
+     * idle duration in seconds (0 for the php default).
+     */
+    public function setDownloadLimits(int $maxSize, int $timeout): self
+    {
+        $this->downloadMaxSize = max(0, $maxSize);
+        $this->downloadTimeout = max(0, $timeout);
+        return $this;
+    }
+
+    public function getDownloadLimits(): array
+    {
+        return [
+            'max_size' => $this->downloadMaxSize,
+            'timeout' => $this->downloadTimeout,
+        ];
     }
 
     /**

@@ -30,6 +30,14 @@ class ProcessXsltFactory implements FactoryInterface
         $config = $services->get('Config');
         $tempDir = $config['temp_dir'] ?? sys_get_temp_dir();
 
-        return new ProcessXslt($logger, $command, $tempDir);
+        // The limits are set in the config form, in seconds and megabytes. An
+        // empty value uses the default one.
+        $limit = fn (string $name, int $default): int => is_numeric($value = $settings->get($name)) ? (int) $value : $default;
+        return (new ProcessXslt($logger, $command, $tempDir))
+            ->setTimeout($limit('mapper_xslt_timeout', 600))
+            ->setDownloadLimits(
+                $limit('mapper_download_max_size', 512) * 1048576,
+                $limit('mapper_download_timeout', 60)
+            );
     }
 }

@@ -1561,7 +1561,7 @@ class MapperConfig
         $mapping[self::SECTION_INFO]['label'] = $this->currentName;
 
         try {
-            $xml = new \SimpleXMLElement($content);
+            $xml = new \SimpleXMLElement($content, LIBXML_NONET);
         } catch (\Throwable $e) {
             $mapping['has_error'] = true;
             $this->logger->err('Invalid xml mapping: ' . $e->getMessage());
@@ -1798,7 +1798,7 @@ class MapperConfig
         // Xml string.
         if (mb_substr($map, 0, 1) === '<') {
             try {
-                $xml = new \SimpleXMLElement($map);
+                $xml = new \SimpleXMLElement($map, LIBXML_NONET);
                 return $this->parseXmlMap($xml);
             } catch (\Throwable $e) {
                 return [self::MAP_FROM => [], self::MAP_TO => [], self::MAP_MOD => [], 'has_error' => true];

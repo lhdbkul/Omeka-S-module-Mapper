@@ -743,7 +743,7 @@ class Mapper
         $newDoc = new DOMDocument('1.0', 'UTF-8');
         $newDoc->preserveWhiteSpace = false;
         $newDoc->formatOutput = true;
-        if (!@$newDoc->loadXML($xml)) {
+        if (!@$newDoc->loadXML($xml, LIBXML_NONET)) {
             return $result;
         }
         return $newDoc;
@@ -807,7 +807,7 @@ class Mapper
     protected function xmlPivotToContext(string $xml): array
     {
         $doc = new DOMDocument();
-        if (!@$doc->loadXML($xml)) {
+        if (!@$doc->loadXML($xml, LIBXML_NONET)) {
             return [];
         }
         if (!$doc->documentElement) {

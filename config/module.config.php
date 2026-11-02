@@ -177,6 +177,9 @@ return [
         'config' => [
             'mapper_xslt_processor_mode' => 'auto',
             'mapper_xslt_processor' => '',
+            'mapper_xslt_timeout' => 600,
+            'mapper_download_max_size' => 512,
+            'mapper_download_timeout' => 60,
         ],
         'field_automap' => require dirname(__DIR__) . '/data/mapping/automap.php',
     ],
