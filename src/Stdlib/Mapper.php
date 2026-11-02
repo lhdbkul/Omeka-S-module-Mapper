@@ -1678,8 +1678,8 @@ class Mapper
         } elseif ($fromValue instanceof DOMNode) {
             $stringValue = $outputAsXml ? $fromValue->C14N() : (string) $fromValue->nodeValue;
         } elseif ($fromValue instanceof SimpleXMLElement) {
-            // Not used any more. SimpleXml doesn't support context or subquery.
-            $stringValue = $outputAsXml ? $fromValue->saveXML() : (string) $fromValue;
+            // The internal queries use DOM, so it is only for external callers.
+            $stringValue = $outputAsXml ? $fromValue->asXML() : (string) $fromValue;
         }
 
         // No pattern - return value directly.

@@ -8,7 +8,7 @@ class MapperRepresentation extends AbstractEntityRepresentation
 {
     public function getControllerName()
     {
-        return 'mapping';
+        return 'mapper';
     }
 
     public function getJsonLdType()
