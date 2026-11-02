@@ -55,6 +55,28 @@ class SerializeTest extends MapperDbTestCase
         $this->assertSame((string) $item->id(), $result['id']);
     }
 
+    /**
+     * A linked resource is output with its title, not as an empty value.
+     */
+    public function testSerializeLinkedResource(): void
+    {
+        $this->mapper->setMapping('export_linked_resource', [
+            'info' => ['label' => 'A', 'querier' => 'omeka', 'to' => 'json'],
+            'maps' => [
+                ['from' => ['path' => 'dcterms:relation'], 'to' => ['field' => 'dc.relation']],
+            ],
+        ]);
+
+        $linked = $this->createItem(['dcterms:title' => 'Linked item']);
+        $item = $this->createItem([
+            'dcterms:title' => 'Hello',
+            'dcterms:relation' => [['type' => 'resource:item', 'value_resource_id' => $linked->id()]],
+        ]);
+        $result = $this->mapper->serialize($item);
+
+        $this->assertSame('Linked item', $result['dc']['relation'] ?? null);
+    }
+
     public function testSerializeArrayMultipleValues(): void
     {
         $this->mapper->setMapping('export_array_multi', [

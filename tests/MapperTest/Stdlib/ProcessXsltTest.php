@@ -270,4 +270,101 @@ XSL;
             @unlink($xslPath);
         }
     }
+
+    // =========================================================================
+    // External command
+    // =========================================================================
+
+    /**
+     * Run an external command on a temporary xml file and restore the command.
+     */
+    protected function processWithCommand(string $command, int $timeout = 600): ?string
+    {
+        $original = $this->processXslt->getCommand();
+        $originalTimeout = $this->processXslt->getTimeout();
+        $input = tempnam(sys_get_temp_dir(), 'mapper_test_') . '.xml';
+        file_put_contents($input, '<?xml version="1.0"?><root>Test</root>');
+        $this->processXslt->setCommand($command)->setTimeout($timeout);
+        try {
+            return $this->processXslt->process($input, dirname(__DIR__, 3) . '/data/mapping/common/identity.xslt1.xsl');
+        } finally {
+            $this->processXslt->setCommand($original)->setTimeout($originalTimeout);
+            @unlink($input);
+        }
+    }
+
+    /**
+     * Messages of the processor on stderr are not errors when it succeeds.
+     */
+    public function testExternalCommandWithMessagesSucceeds(): void
+    {
+        $output = $this->processWithCommand('cp %1$s %3$s; echo "Warning: noise" >&2');
+        $this->assertFileExists($output);
+        $this->assertStringContainsString('Test', file_get_contents($output));
+        @unlink($output);
+    }
+
+    public function testExternalCommandFailureIsAnError(): void
+    {
+        $this->expectException(\Exception::class);
+        $this->expectExceptionMessage('exit code 3');
+        $this->processWithCommand('exit 3');
+    }
+
+    public function testExternalCommandIsStoppedAfterTimeout(): void
+    {
+        $start = microtime(true);
+        try {
+            $this->processWithCommand('sleep 30', 1);
+            $this->fail('The command should be stopped.');
+        } catch (\Exception $e) {
+            $this->assertStringContainsString('stopped after 1 seconds', $e->getMessage());
+        }
+        $this->assertLessThan(10, microtime(true) - $start);
+    }
+
+    public function testExternalCommandWithoutTimeout(): void
+    {
+        $output = $this->processWithCommand('sleep 1; cp %1$s %3$s', 0);
+        $this->assertFileExists($output);
+        @unlink($output);
+    }
+
+    /**
+     * The limits are set from the settings of the config form, and an empty
+     * value uses the default one.
+     */
+    public function testLimitsAreSetFromSettings(): void
+    {
+        $services = $this->getApplication()->getServiceManager();
+        $settings = $services->get('Omeka\Settings');
+        $settings->set('mapper_xslt_timeout', '0');
+        $settings->set('mapper_download_max_size', '1024');
+        $settings->set('mapper_download_timeout', '');
+        try {
+            $processXslt = $services->build(ProcessXslt::class);
+            $this->assertSame(0, $processXslt->getTimeout());
+            $this->assertSame(['max_size' => 1024 * 1048576, 'timeout' => 60], $processXslt->getDownloadLimits());
+        } finally {
+            foreach (['mapper_xslt_timeout', 'mapper_download_max_size', 'mapper_download_timeout'] as $name) {
+                $settings->delete($name);
+            }
+        }
+    }
+
+    public function testConfigFormHasLimits(): void
+    {
+        $form = $this->getApplication()->getServiceManager()->get('FormElementManager')->get(\Mapper\Form\ConfigForm::class);
+        foreach (['mapper_xslt_timeout', 'mapper_download_max_size', 'mapper_download_timeout'] as $name) {
+            $this->assertTrue($form->has($name), $name);
+        }
+        $form->setData([
+            'csrf' => $form->has('csrf') ? $form->get('csrf')->getValue() : null,
+            'mapper_xslt_processor_mode' => 'auto',
+            'mapper_xslt_timeout' => '',
+            'mapper_download_max_size' => '0',
+            'mapper_download_timeout' => '30',
+        ]);
+        $this->assertTrue($form->isValid(), json_encode($form->getMessages()));
+    }
 }

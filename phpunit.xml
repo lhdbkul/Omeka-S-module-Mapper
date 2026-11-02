@@ -60,6 +60,10 @@
         <testsuite name="controller">
             <directory suffix="Test.php">tests/MapperTest/Controller</directory>
         </testsuite>
+        <!-- Upgrade of the module (the script is included once per process) -->
+        <testsuite name="upgrade">
+            <file>tests/MapperTest/UpgradeTest.php</file>
+        </testsuite>
         <!-- Combined mapping tests (recommended for CI) -->
         <testsuite name="mapping">
             <file>tests/MapperTest/Stdlib/FilterTraitTest.php</file>

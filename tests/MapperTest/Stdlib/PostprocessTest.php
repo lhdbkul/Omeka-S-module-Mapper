@@ -14,21 +14,35 @@ class PostprocessTest extends MapperDbTestCase
 {
     protected Mapper $mapper;
 
+    /**
+     * Copy of the fixtures in the user mapping directory, since the files
+     * cannot be read outside of the mapping directories.
+     */
+    protected string $fixturesPath;
+
     public function setUp(): void
     {
         parent::setUp();
         $this->mapper = $this->getServiceLocator()->get('Mapper\Mapper');
+        $this->fixturesPath = $this->getServiceLocator()->get('Mapper\MappingPaths')->userPath()
+            . '/mapper_test_' . bin2hex(random_bytes(4));
+        @mkdir($this->fixturesPath, 0775, true);
+        foreach (glob(dirname(__DIR__, 2) . '/fixtures/xsl/*') as $file) {
+            copy($file, $this->fixturesPath . '/' . basename($file));
+        }
     }
 
     public function tearDown(): void
     {
+        array_map('unlink', glob($this->fixturesPath . '/*'));
+        @rmdir($this->fixturesPath);
         $this->cleanupResources();
         parent::tearDown();
     }
 
     protected function fixturesPath(): string
     {
-        return dirname(dirname(__DIR__)) . '/fixtures/xsl';
+        return $this->fixturesPath;
     }
 
     protected function buildMappingXml(string $postprocessRef, string $field): string
@@ -89,6 +103,33 @@ XML;
         $this->assertSame('Le titre', $modsTitles->item(0)->textContent);
     }
 
+    /**
+     * The postprocess is kept for the mappings set as array or json.
+     */
+    public function testRenameXslWithArrayAndJsonMappings(): void
+    {
+        $mapping = [
+            'info' => [
+                'label' => 'postprocess array',
+                'querier' => 'omeka',
+                'postprocess' => $this->fixturesPath() . '/rename_title.xsl',
+            ],
+            'params' => [
+                'xmlns.dc' => 'http://purl.org/dc/elements/1.1/',
+            ],
+            'maps' => [
+                ['from' => ['path' => 'dcterms:title'], 'to' => ['field' => '/dc:title']],
+            ],
+        ];
+        $item = $this->createItem(['dcterms:title' => 'Le titre']);
+        foreach (['array' => $mapping, 'json' => json_encode($mapping)] as $type => $mappingOrRef) {
+            $this->mapper->setMapping('postprocess_rename_' . $type, $mappingOrRef);
+            $doc = $this->mapper->serialize($item);
+            $modsTitles = $doc->getElementsByTagNameNS('http://www.loc.gov/mods/v3', 'title');
+            $this->assertSame(1, $modsTitles->length, $type);
+        }
+    }
+
     public function testMissingXslReturnsOriginalDom(): void
     {
         $ref = $this->fixturesPath() . '/__does_not_exist__.xsl';
@@ -102,6 +143,41 @@ XML;
         $titles = $doc->getElementsByTagNameNS('http://purl.org/dc/elements/1.1/', 'title');
         $this->assertSame(1, $titles->length);
         $this->assertSame('Stay', $titles->item(0)->textContent);
+    }
+
+    /**
+     * A postprocess outside of the mapping directories is not read.
+     */
+    public function testPostprocessOutsideOfMappingDirectoriesIsSkipped(): void
+    {
+        $ref = dirname(__DIR__, 2) . '/fixtures/xsl/rename_title.xsl';
+        $this->assertFileExists($ref);
+        $this->mapper->setMapping('postprocess_outside', $this->buildMappingXml($ref, '/dc:title'));
+
+        $item = $this->createItem(['dcterms:title' => 'Stay']);
+        $doc = $this->mapper->serialize($item);
+
+        $titles = $doc->getElementsByTagNameNS('http://purl.org/dc/elements/1.1/', 'title');
+        $this->assertSame(1, $titles->length);
+    }
+
+    /**
+     * A Twig-XML template outside of the mapping directories is not read, so
+     * its content cannot be output.
+     */
+    public function testTwigXmlTemplateOutsideOfMappingDirectoriesIsNotRead(): void
+    {
+        $template = sys_get_temp_dir() . '/mapper_test_' . bin2hex(random_bytes(4)) . '.twig.xml';
+        file_put_contents($template, '<secret>outside</secret>');
+        try {
+            $this->mapper->setMapping('postprocess_twig_outside', $this->buildMappingXml($template, '/dc:title'));
+            $item = $this->createItem(['dcterms:title' => 'Stay']);
+            $doc = $this->mapper->serialize($item);
+            $this->assertInstanceOf(\DOMDocument::class, $doc);
+            $this->assertStringNotContainsString('outside', $doc->saveXML());
+        } finally {
+            @unlink($template);
+        }
     }
 
     public function testOmekaToModsMappingFile(): void

@@ -689,6 +689,23 @@ class MapperTest extends MapperDbTestCase
     /**
      * Mapping with combined qualifiers should store all of them.
      */
+    /**
+     * A param may be a pattern with variables, like the pagination of a json
+     * endpoint.
+     */
+    public function testConvertToStringWithVariables(): void
+    {
+        $this->mapper->setMapping('convert_to_string_test', <<<'INI'
+            [params]
+            pagination = ~ {{ endpoint }}/page/{{ page }}
+            simple = {{ endpoint }}/page/{page}
+            INI);
+        $this->mapper->setVariables(['endpoint' => 'https://example.org/api', 'page' => 2]);
+
+        $this->assertSame('https://example.org/api/page/2', $this->mapper->convertToString('params', 'pagination'));
+        $this->assertSame('https://example.org/api/page/2', $this->mapper->convertToString('params', 'simple'));
+    }
+
     public function testMappingCombinedQualifiersArePreserved(): void
     {
         $mapping = [
@@ -698,7 +715,7 @@ class MapperTest extends MapperDbTestCase
             ],
         ];
 
-        $this->mapper->setMapping('combined_test', $mapping);
+        $this->mapper->setMapping('combined_qualifiers_test', $mapping);
         $parsed = $this->mapper->getMapping();
 
         $to = $parsed['maps'][0]['to'];

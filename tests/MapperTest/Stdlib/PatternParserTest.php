@@ -306,4 +306,14 @@ class PatternParserTest extends TestCase
         $this->assertContains('{{ title }}', $result['replace']);
         $this->assertContains('{état}', $result['replace']);
     }
+
+    public function testSplitPipes(): void
+    {
+        $this->assertSame(['value', 'upper'], PatternParser::splitPipes(' value | upper '));
+        $this->assertSame(
+            ['value', "replace({'|': ' '})", 'join("|")', "split('\\'|')"],
+            PatternParser::splitPipes("value|replace({'|': ' '})|join(\"|\")|split('\\'|')")
+        );
+        $this->assertSame(['value', 'slice(0, 2)'], PatternParser::splitPipes('value||slice(0, 2)'));
+    }
 }

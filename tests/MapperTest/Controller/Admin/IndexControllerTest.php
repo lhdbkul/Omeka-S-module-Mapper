@@ -81,6 +81,8 @@ class IndexControllerTest extends AbstractControllerTestCase
         $this->dispatch('/admin/mapper/copy?id=module:lido/lido.mc.xml');
         $this->assertResponseStatusCode(200);
         // Copy shows the add form with the mapping content pre-filled.
+        $this->assertActionName('copy');
+        $this->assertQuery('form textarea');
     }
 
     // =========================================================================

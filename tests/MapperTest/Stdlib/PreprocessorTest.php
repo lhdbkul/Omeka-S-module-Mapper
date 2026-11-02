@@ -106,6 +106,31 @@ class PreprocessorTest extends AbstractHttpControllerTestCase
         $this->assertStringContainsString('Test', $result);
     }
 
+    /**
+     * The user files are in files/mapping, even when the base path of the
+     * local store is not set, like in the default config.
+     *
+     * @see https://gitlab.com/Daniel-KM/Omeka-S-module-Mapper/-/work_items/3
+     */
+    public function testProcessWithUserXslReference(): void
+    {
+        $config = $this->getApplication()->getServiceManager()->get('Config');
+        $userBasePath = ($config['file_store']['local']['base_path'] ?: (OMEKA_PATH . '/files')) . '/mapping';
+        $this->assertSame($userBasePath, $this->preprocessor->getUserBasePath());
+
+        $filename = 'mapper_test_' . bin2hex(random_bytes(4)) . '.xsl';
+        @mkdir($userBasePath, 0775, true);
+        copy($this->mappingPath . '/common/identity.xslt1.xsl', $userBasePath . '/' . $filename);
+        try {
+            $result = $this->preprocessor->process('<?xml version="1.0"?><root><item>Test</item></root>', ['user:' . $filename]);
+        } finally {
+            @unlink($userBasePath . '/' . $filename);
+        }
+
+        $this->assertIsString($result);
+        $this->assertStringContainsString('Test', $result);
+    }
+
     public function testProcessWithRelativePathInContext(): void
     {
         $content = '<?xml version="1.0"?><root><data>Value</data></root>';
@@ -155,9 +180,11 @@ class PreprocessorTest extends AbstractHttpControllerTestCase
 </xsl:stylesheet>
 XSL;
 
-        // Write XSL to temp file and use absolute path.
-        $tempDir = sys_get_temp_dir();
-        $xslPath = tempnam($tempDir, 'test_xsl_') . '.xsl';
+        // Write XSL to a file of the user mapping directory and use the
+        // absolute path.
+        $userBasePath = $this->preprocessor->getUserBasePath();
+        @mkdir($userBasePath, 0775, true);
+        $xslPath = $userBasePath . '/mapper_test_' . bin2hex(random_bytes(4)) . '.xsl';
         file_put_contents($xslPath, $xsl);
 
         try {
@@ -246,28 +273,59 @@ XSL;
     }
 
     // =========================================================================
-    // Setter/Getter Tests
+    // Paths
     // =========================================================================
 
-    public function testSetAndGetBasePath(): void
+    public function testGetUserBasePath(): void
     {
-        $original = $this->preprocessor->getBasePath();
-
-        $this->preprocessor->setBasePath('/custom/path');
-        $this->assertSame('/custom/path', $this->preprocessor->getBasePath());
-
-        // Restore original.
-        $this->preprocessor->setBasePath($original);
+        $config = $this->getApplication()->getServiceManager()->get('Config');
+        $userBasePath = ($config['file_store']['local']['base_path'] ?: (OMEKA_PATH . '/files')) . '/mapping';
+        $this->assertSame($userBasePath, $this->preprocessor->getUserBasePath());
     }
 
-    public function testSetAndGetUserBasePath(): void
+    /**
+     * A transformation cannot be read outside of the mapping directories.
+     */
+    public function testProcessWithReferenceOutsideOfMappingDirectories(): void
     {
-        $original = $this->preprocessor->getUserBasePath();
+        $content = '<?xml version="1.0"?><root><item>Test</item></root>';
+        $outside = sys_get_temp_dir() . '/mapper_test_' . bin2hex(random_bytes(4)) . '.xsl';
+        copy($this->mappingPath . '/common/identity.xslt1.xsl', $outside);
+        try {
+            foreach ([$outside, 'module:../../../../' . ltrim($outside, '/'), 'user:../../' . basename($outside)] as $reference) {
+                $this->assertNull($this->preprocessor->process($content, [$reference]), $reference);
+            }
+        } finally {
+            @unlink($outside);
+        }
+    }
 
-        $this->preprocessor->setUserBasePath('/custom/user/path');
-        $this->assertSame('/custom/user/path', $this->preprocessor->getUserBasePath());
+    /**
+     * A transformation of the database is applied by label.
+     */
+    public function testProcessWithDatabaseReference(): void
+    {
+        $services = $this->getApplication()->getServiceManager();
+        $auth = $services->get('Omeka\AuthenticationService');
+        $adapter = $auth->getAdapter();
+        $adapter->setIdentity('admin@example.com');
+        $adapter->setCredential('root');
+        $auth->authenticate();
 
-        // Restore original.
-        $this->preprocessor->setUserBasePath($original);
+        $api = $services->get('Omeka\ApiManager');
+        $label = 'mapper_test_' . bin2hex(random_bytes(4)) . '.xsl';
+        $mapper = $api->create('mappers', [
+            'o:label' => $label,
+            'o:mapping' => file_get_contents($this->mappingPath . '/common/identity.xslt1.xsl'),
+        ])->getContent();
+        try {
+            $result = $this->preprocessor->process('<?xml version="1.0"?><root><item>Test</item></root>', ['mapping:' . $label]);
+            $this->assertIsString($result);
+            $this->assertStringContainsString('Test', $result);
+            $this->assertNull($this->preprocessor->process('<root/>', ['mapping:missing_' . $label]));
+        } finally {
+            $api->delete('mappers', $mapper->id());
+            $auth->clearIdentity();
+        }
     }
 }

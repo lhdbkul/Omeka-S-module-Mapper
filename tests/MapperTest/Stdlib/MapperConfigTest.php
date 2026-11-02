@@ -28,6 +28,202 @@ class MapperConfigTest extends MapperDbTestCase
         $this->mapperConfig = $this->getServiceLocator()->get('Mapper\MapperConfig');
     }
 
+    /**
+     * A file reference cannot get out of the mapping directories.
+     */
+    public function testFileReferenceOutsideOfMappingDirectoriesIsNotRead(): void
+    {
+        $mappingPaths = $this->getServiceLocator()->get('Mapper\MappingPaths');
+        $userPath = $mappingPaths->userPath();
+        @mkdir($userPath, 0775, true);
+        // A valid mapping just outside of the user mapping directory.
+        $filename = 'mapper_test_' . bin2hex(random_bytes(4)) . '.ini';
+        $filepath = dirname($userPath) . '/' . $filename;
+        file_put_contents($filepath, "[maps]\n~ = dcterms:title ~ outside");
+        $moduleToFile = str_repeat('../', substr_count(trim($mappingPaths->modulePath(), '/'), '/') + 1) . ltrim($filepath, '/');
+        try {
+            foreach ([
+                'user:../' . $filename,
+                'module:' . $moduleToFile,
+                $moduleToFile,
+            ] as $reference) {
+                $mapping = $this->mapperConfig->__invoke('outside', $reference);
+                $this->assertTrue($this->mapperConfig->hasError('outside'), $reference);
+                $this->assertStringNotContainsString('outside', serialize($mapping['maps'] ?? []), $reference);
+            }
+        } finally {
+            @unlink($filepath);
+        }
+    }
+
+    /**
+     * A php mapping is included only when it is a file of the module.
+     */
+    public function testUserPhpMappingIsNotIncluded(): void
+    {
+        $userPath = $this->getServiceLocator()->get('Mapper\MappingPaths')->userPath();
+        @mkdir($userPath, 0775, true);
+        $filename = 'mapper_test_' . bin2hex(random_bytes(4)) . '.php';
+        file_put_contents($userPath . '/' . $filename, '<?php $GLOBALS[\'mapper_test_included\'] = true; return [\'maps\' => []];');
+        unset($GLOBALS['mapper_test_included']);
+        try {
+            $this->mapperConfig->__invoke('user_php', 'user:' . $filename);
+            $this->assertTrue($this->mapperConfig->hasError('user_php'));
+            $this->assertArrayNotHasKey('mapper_test_included', $GLOBALS);
+        } finally {
+            @unlink($userPath . '/' . $filename);
+        }
+    }
+
+    /**
+     * The separator of an ini line is the first "=" outside of brackets and
+     * quotes, so a "=" in the destination is kept.
+     */
+    public function testIniLineWithEqualsInDestination(): void
+    {
+        $mapping = $this->mapperConfig->__invoke('ini_equals', <<<'INI'
+            [params]
+            url = https://example.org/api?a=b
+            query = "q={query}&rows=10"
+
+            [maps]
+            id = dcterms:identifier ~ https://example.org/?id={id}
+            /record/datafield[@tag="200"]/subfield[@code="a"] = dcterms:title
+            ~ = dcterms:description ~ a=b
+            INI);
+
+        $this->assertSame('https://example.org/api?a=b', $mapping['params']['url'] ?? null);
+        $this->assertSame('q={query}&rows=10', $mapping['params']['query'] ?? null);
+
+        $this->assertSame('id', $mapping['maps'][0]['from']['path'] ?? null);
+        $this->assertSame('dcterms:identifier', $mapping['maps'][0]['to']['field'] ?? null);
+        $this->assertSame('https://example.org/?id={id}', $mapping['maps'][0]['mod']['pattern'] ?? null);
+
+        $this->assertSame('/record/datafield[@tag="200"]/subfield[@code="a"]', $mapping['maps'][1]['from']['path'] ?? null);
+        $this->assertSame('dcterms:title', $mapping['maps'][1]['to']['field'] ?? null);
+
+        $this->assertSame('dcterms:description', $mapping['maps'][2]['to']['field'] ?? null);
+        $this->assertSame('a=b', $mapping['maps'][2]['mod']['pattern'] ?? null);
+    }
+
+    /**
+     * A quoted custom vocab label with spaces is a single datatype.
+     */
+    public function testIniDestinationWithQuotedCustomVocab(): void
+    {
+        $mapping = $this->mapperConfig->__invoke('ini_customvocab', "[maps]\ntype = dcterms:type ^^customvocab:\"My Type List\" @fra");
+        $to = $mapping['maps'][0]['to'];
+        $this->assertSame('dcterms:type', $to['field']);
+        $this->assertSame('fra', $to['language']);
+        $this->assertCount(1, $to['datatype']);
+        $this->assertStringStartsWith('customvocab:', $to['datatype'][0]);
+    }
+
+    /**
+     * The base of a mapping may be a json or a php mapping, and a circular
+     * inheritance through them is stopped.
+     */
+    public function testInheritanceFromJsonAndPhpMappings(): void
+    {
+        $mappingPaths = $this->getServiceLocator()->get('Mapper\MappingPaths');
+        $userPath = $mappingPaths->userPath();
+        @mkdir($userPath, 0775, true);
+        $suffix = bin2hex(random_bytes(4));
+        $json = "mapper_test_$suffix.json";
+        $php = "mapper_test_$suffix.php";
+        $cycle = "mapper_test_{$suffix}_cycle.ini";
+        file_put_contents($userPath . '/' . $json, json_encode([
+            'info' => ['label' => 'Json base', 'querier' => 'jsdot'],
+            'maps' => [['from' => ['path' => 'title'], 'to' => ['field' => 'dcterms:title']]],
+        ]));
+        // Only the php files of the module are included.
+        file_put_contents($mappingPaths->modulePath() . '/' . $php, "<?php\nreturn ['info' => ['label' => 'Php base'], 'maps' => [['from' => ['path' => 'date'], 'to' => ['field' => 'dcterms:date']]]];\n");
+        // A json base that inherits from an ini that inherits from the json.
+        file_put_contents($userPath . '/' . $cycle, "[info]\nmapper = user:$json\n\n[maps]\ncreator = dcterms:creator");
+        $jsonCycle = "mapper_test_{$suffix}_cycle.json";
+        file_put_contents($userPath . '/' . $jsonCycle, json_encode([
+            'info' => ['mapper' => "user:$cycle"],
+            'maps' => [['from' => ['path' => 'subject'], 'to' => ['field' => 'dcterms:subject']]],
+        ]));
+        file_put_contents($userPath . '/' . $json, json_encode([
+            'info' => ['label' => 'Json base', 'querier' => 'jsdot', 'mapper' => "user:$jsonCycle"],
+            'maps' => [['from' => ['path' => 'title'], 'to' => ['field' => 'dcterms:title']]],
+        ]));
+        try {
+            $fields = fn (array $mapping) => array_column(array_column($mapping['maps'], 'to'), 'field');
+
+            $mapping = $this->mapperConfig->__invoke('inherit_json', "[info]\nmapper = user:$json\n\n[maps]\nid = dcterms:identifier");
+            $this->assertFalse($this->mapperConfig->hasError('inherit_json'));
+            $this->assertSame('jsdot', $mapping['info']['querier']);
+            $this->assertContains('dcterms:title', $fields($mapping));
+            $this->assertContains('dcterms:identifier', $fields($mapping));
+
+            $mapping = $this->mapperConfig->__invoke('inherit_php', "[info]\nmapper = module:$php\n\n[maps]\nid = dcterms:identifier");
+            $this->assertFalse($this->mapperConfig->hasError('inherit_php'));
+            $this->assertSame(['dcterms:date', 'dcterms:identifier'], $fields($mapping));
+        } finally {
+            foreach ([$json, $cycle, $jsonCycle] as $file) {
+                @unlink($userPath . '/' . $file);
+            }
+            @unlink($mappingPaths->modulePath() . '/' . $php);
+        }
+    }
+
+    /**
+     * A mapping of the database is loaded by id or by label.
+     */
+    public function testDatabaseReferences(): void
+    {
+        $api = $this->getServiceLocator()->get('Omeka\ApiManager');
+        $label = 'Mapper test ' . bin2hex(random_bytes(4));
+        $mapper = $api->create('mappers', [
+            'o:label' => $label,
+            'o:mapping' => "[maps]\ntitle = dcterms:title",
+        ])->getContent();
+        try {
+            foreach (['mapping:' . $mapper->id(), 'mapping:' . $label] as $reference) {
+                $mapping = $this->mapperConfig->__invoke('db:' . $reference, $reference);
+                $this->assertFalse($this->mapperConfig->hasError('db:' . $reference), $reference);
+                $this->assertSame('dcterms:title', $mapping['maps'][0]['to']['field'] ?? null, $reference);
+            }
+            $this->mapperConfig->__invoke('db:missing', 'mapping:Missing ' . $label);
+            $this->assertTrue($this->mapperConfig->hasError('db:missing'));
+        } finally {
+            $api->delete('mappers', $mapper->id());
+        }
+    }
+
+    /**
+     * A json mapping can be passed as content, and an invalid one is an error.
+     */
+    public function testJsonContent(): void
+    {
+        $mapping = $this->mapperConfig->__invoke('json_content', '{"info": {"label": "Json", "context": "ead"}, "maps": [{"from": {"path": "title"}, "to": {"field": "dcterms:title"}}]}');
+        $this->assertFalse($this->mapperConfig->hasError('json_content'));
+        $this->assertSame('Json', $mapping['info']['label']);
+        $this->assertSame('ead', $mapping['info']['context']);
+        $this->assertSame('dcterms:title', $mapping['maps'][0]['to']['field'] ?? null);
+
+        $this->mapperConfig->__invoke('json_invalid', '{"info": {"label": "Json"}, "maps": [');
+        $this->assertTrue($this->mapperConfig->hasError('json_invalid'));
+    }
+
+    /**
+     * A mapping registered again with the same name and another content is
+     * parsed again (for example one-line mappings built on the fly).
+     */
+    public function testSameNameWithAnotherContentIsParsedAgain(): void
+    {
+        $first = $this->mapperConfig->__invoke('same_name', "[maps]\n~ = dcterms:title ~ First");
+        $second = $this->mapperConfig->__invoke('same_name', "[maps]\n~ = dcterms:title ~ Second");
+        $this->assertSame('First', $first['maps'][0]['mod']['pattern'] ?? null);
+        $this->assertSame('Second', $second['maps'][0]['mod']['pattern'] ?? null);
+
+        // The same content is not parsed again.
+        $this->mapperConfig->__invoke('same_name', "[maps]\n~ = dcterms:title ~ Second");
+        $this->assertSame('Second', $this->mapperConfig->getMapping('same_name')['maps'][0]['mod']['pattern'] ?? null);
+    }
+
     // Basic invoke tests
 
     public function testInvokeReturnsItself(): void
@@ -510,6 +706,23 @@ INI;
         $result = $this->mapperConfig->getMapping('url_pattern_test');
         // The endpoint should be evaluated from the url.
         $this->assertSame('https://example.org', $result['params']['endpoint']);
+    }
+
+    /**
+     * The static params use the same filters as the maps, with arguments.
+     */
+    public function testEvaluateStaticParamsUsesFiltersWithArguments(): void
+    {
+        $this->mapperConfig->__invoke('url_filters_test', <<<'INI'
+            [params]
+            collection = ~ {{ url|trim('/')|split('/')|last|upper }}
+            host = ~ {{ url|replace({'https://': ''})|split('/')|first }}
+            INI);
+        $this->mapperConfig->evaluateStaticParams(['url' => 'https://example.org/api/items/'], 'url_filters_test');
+
+        $params = $this->mapperConfig->getMapping('url_filters_test')['params'];
+        $this->assertSame('ITEMS', $params['collection']);
+        $this->assertSame('example.org', $params['host']);
     }
 
     public function testEvaluateStaticParamsSkipsDynamicParams(): void

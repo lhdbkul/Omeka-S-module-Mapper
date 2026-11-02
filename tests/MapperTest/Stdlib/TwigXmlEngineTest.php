@@ -172,4 +172,25 @@ class TwigXmlEngineTest extends TestCase
         ]);
         $this->assertSame('<r>ab</r><r>c</r>', $out);
     }
+
+    public function testEscapeFilterDoesNotEscapeTwice(): void
+    {
+        $this->assertSame('<v>a &amp; b</v>', $this->engine->render('<v>{{ x|e }}</v>', ['x' => 'a & b']));
+        $this->assertSame('<v>a &amp; b</v>', $this->engine->render('<v>{{ x|escape }}</v>', ['x' => 'a & b']));
+    }
+
+    public function testPipeAndBracesInsideFilterArguments(): void
+    {
+        $out = $this->engine->render('<v>{{ x|replace({"|": " / "}) }}</v>', ['x' => 'a|b']);
+        $this->assertSame('<v>a / b</v>', $out);
+    }
+
+    public function testLoopIndexWithStringKeys(): void
+    {
+        $out = $this->engine->render(
+            '{% for v in list %}{{ loop.index }}:{{ loop.key }}{% if loop.last %}.{% endif %} {% endfor %}',
+            ['list' => ['a' => 1, 'b' => 2]]
+        );
+        $this->assertSame('1:a 2:b. ', $out);
+    }
 }

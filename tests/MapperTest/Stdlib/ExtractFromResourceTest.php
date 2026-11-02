@@ -63,6 +63,31 @@ class ExtractFromResourceTest extends MapperDbTestCase
         $this->assertSame([true], $result);
     }
 
+    /**
+     * @see https://gitlab.com/Daniel-KM/Omeka-S-module-Mapper/-/work_items/3
+     */
+    public function testMetaSiteUrl(): void
+    {
+        $site = $this->api()->create('sites', [
+            'o:title' => 'Mapper site',
+            'o:slug' => 'mapper-site-' . bin2hex(random_bytes(3)),
+            'o:theme' => 'default',
+            'o:is_public' => true,
+        ])->getContent();
+        $item = $this->api()->create('items', [
+            'o:is_public' => true,
+            'o:site' => [['o:id' => $site->id()]],
+        ])->getContent();
+        try {
+            $result = $this->mapper->extractFromResource($item, 'o:site_url');
+            $this->assertCount(1, $result);
+            $this->assertMatchesRegularExpression('~^https?://.*/s/' . preg_quote($site->slug(), '~') . '/item/' . $item->id() . '$~', $result[0]);
+        } finally {
+            $this->api()->delete('items', $item->id());
+            $this->api()->delete('sites', $site->id());
+        }
+    }
+
     public function testFilterByLanguage(): void
     {
         $item = $this->createItem([
@@ -142,6 +167,21 @@ class ExtractFromResourceTest extends MapperDbTestCase
 
         $types = $this->mapper->extractFromResource($item, 'dcterms:title/@datatype');
         $this->assertSame(['literal'], $types);
+    }
+
+    /**
+     * The omeka metadata are read with the methods of the representations.
+     */
+    public function testMetaAccessors(): void
+    {
+        $item = $this->createItem(['dcterms:title' => 'Metadata']);
+        $owner = $this->getServiceLocator()->get('Omeka\AuthenticationService')->getIdentity();
+
+        $this->assertSame(['Metadata'], array_map('strval', $this->mapper->extractFromResource($item, 'o:title')));
+        $this->assertSame([$owner->getEmail()], $this->mapper->extractFromResource($item, 'o:owner/o:email'));
+        $this->assertCount(1, $this->mapper->extractFromResource($item, 'o:created'));
+        $this->assertSame([], $this->mapper->extractFromResource($item, 'o:media'));
+        $this->assertSame([], $this->mapper->extractFromResource($item, 'o:media_type'), 'An item has no media type.');
     }
 
     public function testUnknownMetaReturnsEmpty(): void

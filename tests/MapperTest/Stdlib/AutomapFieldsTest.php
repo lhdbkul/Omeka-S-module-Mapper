@@ -25,14 +25,14 @@ class AutomapFieldsTest extends AbstractHttpControllerTestCase
 
         $api = $this->getServiceLocator()->get('Omeka\ApiManager');
         $easyMeta = $this->getServiceLocator()->get('Common\EasyMeta');
-        $mapNormalizer = $this->getServiceLocator()->get('Mapper\MapNormalizer');
+        $fieldSpecParser = $this->getServiceLocator()->get('Mapper\FieldSpecParser');
         $translator = $this->getServiceLocator()->get('MvcTranslator');
         $logger = $this->getServiceLocator()->get('Omeka\Logger');
 
         $this->fieldAutomap = new AutomapFields(
             $api,
             $easyMeta,
-            $mapNormalizer,
+            $fieldSpecParser,
             $translator,
             $logger,
             []
@@ -300,7 +300,7 @@ class AutomapFieldsTest extends AbstractHttpControllerTestCase
     {
         $api = $this->getServiceLocator()->get('Omeka\ApiManager');
         $easyMeta = $this->getServiceLocator()->get('Common\EasyMeta');
-        $mapNormalizer = $this->getServiceLocator()->get('Mapper\MapNormalizer');
+        $fieldSpecParser = $this->getServiceLocator()->get('Mapper\FieldSpecParser');
 
         $customMap = [
             'My Title' => 'dcterms:title',
@@ -311,7 +311,7 @@ class AutomapFieldsTest extends AbstractHttpControllerTestCase
         $fieldAutomap = new AutomapFields(
             $api,
             $easyMeta,
-            $mapNormalizer,
+            $fieldSpecParser,
             null,
             null,
             $customMap

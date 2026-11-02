@@ -61,6 +61,44 @@ class MapperAdapterTest extends AbstractControllerTestCase
         $this->assertSame('Updated Label', $updated->label());
     }
 
+    /**
+     * Only the label and the mapping are hydrated from the data, so other keys
+     * do not cause errors.
+     */
+    public function testCreateMapperIgnoresOtherKeys(): void
+    {
+        $services = $this->getServiceLocator();
+        $user = $services->get('Omeka\AuthenticationService')->getIdentity();
+        $mapper = $this->api()->create('mappers', [
+            'o:id' => 999999,
+            'o:label' => '  Other keys  ',
+            'o-mapper:mapping' => $this->getSampleIniMapping(),
+            'o:owner' => ['o:id' => $user->getId()],
+            'o:created' => '2000-01-01T00:00:00+00:00',
+            'o:modified' => 'invalid',
+        ])->getContent();
+        $this->createdMapperIds[] = $mapper->id();
+
+        $this->assertNotSame(999999, $mapper->id());
+        $this->assertSame('Other keys', $mapper->label());
+        $this->assertSame($this->getSampleIniMapping(), $mapper->mapping());
+        $this->assertSame($user->getId(), $mapper->owner()->id());
+        $this->assertNotSame('2000', $mapper->created()->format('Y'));
+    }
+
+    public function testUpdateMapperKeepsMappingAndAcceptsPrefixes(): void
+    {
+        $mapper = $this->createMapper('Prefixes', $this->getSampleIniMapping());
+
+        $this->api()->update('mappers', $mapper->id(), ['o:label' => 'Prefixes 2']);
+        $this->assertSame($this->getSampleIniMapping(), $this->api()->read('mappers', $mapper->id())->getContent()->mapping());
+
+        foreach (['o-module-mapper:mapping', 'o-mapper:mapping', 'o:mapping'] as $key) {
+            $this->api()->update('mappers', $mapper->id(), [$key => "[maps]\n~ = dcterms:title ~ $key"], [], ['isPartial' => true]);
+            $this->assertSame("[maps]\n~ = dcterms:title ~ $key", $this->api()->read('mappers', $mapper->id())->getContent()->mapping());
+        }
+    }
+
     public function testDeleteMapper(): void
     {
         $mapper = $this->createMapper('To Delete', $this->getSampleIniMapping());

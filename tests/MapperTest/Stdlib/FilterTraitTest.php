@@ -13,6 +13,13 @@ class FilterTraitTestClass
     use FilterTrait;
 
     /**
+     * Config of the mapping, for named tables.
+     *
+     * @var object|null
+     */
+    public $mapperConfig;
+
+    /**
      * Expose processFilter for testing.
      */
     public function testProcessFilter($value, string $filter)
@@ -132,6 +139,24 @@ class FilterTraitTest extends TestCase
     public function testTitleFilter(): void
     {
         $this->assertSame('Hello World', $this->filter->testProcessFilter('hello world', 'title'));
+    }
+
+    public function testMultibyteStringFilters(): void
+    {
+        $this->assertSame('Élan vital', $this->filter->testProcessFilter('élan vital', 'capitalize'));
+        $this->assertSame('Élan Vital Été', $this->filter->testProcessFilter('élan vital été', 'title'));
+        $this->assertSame('Hello WORLD', $this->filter->testProcessFilter('hello WORLD', 'title'));
+        $this->assertSame(['éa', 'ïb'], $this->filter->testProcessFilter('éaïb', 'split("", 2)'));
+    }
+
+    /**
+     * A "|" inside the arguments of a filter is not a separator of filters.
+     */
+    public function testPipeInsideFilterArguments(): void
+    {
+        $expression = "{{ value|replace({'|': ' / '})|upper }}";
+        $result = $this->filter->testApplyFilters($expression, ['value' => 'a|b'], [$expression]);
+        $this->assertSame('A / B', $result);
     }
 
     public function testTrimFilter(): void
@@ -512,6 +537,32 @@ class FilterTraitTest extends TestCase
 
         $back = $this->filter->testProcessFilter($forward, 'table_reverse({"f", "Female", "m", "Male"})');
         $this->assertSame($code, $back);
+    }
+
+    /**
+     * A named table of another mapping with the same name is not reused.
+     */
+    public function testTableReverseNamedTableOfAnotherMapping(): void
+    {
+        $config = fn (array $tables) => new class($tables) {
+            private array $tables;
+
+            public function __construct(array $tables)
+            {
+                $this->tables = $tables;
+            }
+
+            public function getSection(string $section): array
+            {
+                return $section === 'tables' ? $this->tables : [];
+            }
+        };
+
+        $this->filter->mapperConfig = $config(['gender' => ['f' => 'Female']]);
+        $this->assertSame('f', $this->filter->testProcessFilter('Female', "table_reverse('gender')"));
+
+        $this->filter->mapperConfig = $config(['gender' => ['woman' => 'Female']]);
+        $this->assertSame('woman', $this->filter->testProcessFilter('Female', "table_reverse('gender')"));
     }
 
     // filterMetadata
