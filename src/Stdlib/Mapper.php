@@ -76,6 +76,13 @@ class Mapper
     protected $twigXmlEngine;
 
     /**
+     * Xpath processors by document.
+     *
+     * @var \WeakMap|null
+     */
+    protected $xpaths;
+
+    /**
      * Resolver of the Twig-XML templates.
      *
      * @var \Mapper\Stdlib\MappingPaths|null
@@ -1282,7 +1289,7 @@ class Mapper
             // Lazy-load flat data and fields.
             if ($flatData === null || $fields === null) {
                 $flatData = $flatData ?? $this->flatArray($data);
-                $fields = $fields ?? $this->extractFields($data);
+                $fields = $fields ?? $this->extractFields($data, $flatData);
             }
 
             $values = $this->extractValuesArray($data, $flatData, $fields, $fromPath, $querier);
@@ -1299,9 +1306,12 @@ class Mapper
                 $this->setVariable('value', $value);
 
                 // Build source context for pattern replacements.
-                $source = ($querier === 'index')
-                    ? [$fromPath => $value]
-                    : array_merge($flatData, [$fromPath => $value]);
+                if ($querier === 'index') {
+                    $source = [$fromPath => $value];
+                } else {
+                    $source = $flatData;
+                    $source[$fromPath] = $value;
+                }
 
                 $converted = $this->convertTargetToStringArray($from, $mod, $source, $querier);
                 if ($converted === null || $converted === '') {
@@ -2044,7 +2054,7 @@ class Mapper
     /**
      * Extract fields for simplified lookups (like spreadsheet key-value pairs).
      */
-    protected function extractFields(?array $data): array
+    protected function extractFields(?array $data, ?array $flatData = null): array
     {
         if (empty($data)) {
             return [];
@@ -2057,7 +2067,7 @@ class Mapper
             return [];
         }
 
-        $flatData = $this->flatArray($data);
+        $flatData ??= $this->flatArray($data);
         $fieldsKeyDot = $fieldsKey . '.';
         $fieldsKeyDotLength = mb_strlen($fieldsKeyDot);
 
@@ -2140,14 +2150,51 @@ class Mapper
      */
     protected function xpathQuery($xml, string $query, ?DOMNode $contextNode = null): array
     {
+        $result = $this->xpath($xml)->evaluate($query, $contextNode);
+
+        if ($result === false || $result === '') {
+            return [];
+        }
+
+        if (is_array($result)) {
+            return array_map('strval', $result);
+        }
+
+        if (!is_object($result)) {
+            return [(string) $result];
+        }
+
+        /** @var DOMNodeList $result */
+        $nodes = [];
+        foreach ($result as $node) {
+            $nodes[] = $node;
+        }
+        return $nodes;
+    }
+
+    /**
+     * Get the xpath processor of a document, with its namespaces registered.
+     *
+     * It is prepared once by document, since a mapping queries the same
+     * document for each map and each node.
+     *
+     * @param DOMDocument|SimpleXMLElement $xml
+     */
+    protected function xpath($xml): DOMXPath
+    {
+        $this->xpaths ??= new \WeakMap();
+        if (isset($this->xpaths[$xml])) {
+            return $this->xpaths[$xml];
+        }
+
+        $doc = $xml;
         if ($xml instanceof SimpleXMLElement) {
             $dom = dom_import_simplexml($xml);
             $doc = new DOMDocument();
             $doc->appendChild($doc->importNode($dom, true));
-            $xml = $doc;
         }
 
-        $xpath = new DOMXPath($xml);
+        $xpath = new DOMXPath($doc);
 
         // Register common namespaces as fallbacks for XPath queries, so an
         // import mapping matches real notices whatever prefix the source
@@ -2207,7 +2254,7 @@ class Mapper
         // Auto-register namespaces from the document for XPath queries.
         // This allows queries like /foaf:Person/foaf:name to work.
         // Document namespaces override the common ones if different.
-        foreach ($xpath->query('namespace::*', $xml->documentElement) ?: [] as $node) {
+        foreach ($xpath->query('namespace::*', $doc->documentElement) ?: [] as $node) {
             $prefix = $node->localName;
             $uri = $node->nodeValue;
             // Skip the default 'xml' namespace and empty prefixes.
@@ -2216,26 +2263,7 @@ class Mapper
             }
         }
 
-        $result = $xpath->evaluate($query, $contextNode);
-
-        if ($result === false || $result === '') {
-            return [];
-        }
-
-        if (is_array($result)) {
-            return array_map('strval', $result);
-        }
-
-        if (!is_object($result)) {
-            return [(string) $result];
-        }
-
-        /** @var DOMNodeList $result */
-        $nodes = [];
-        foreach ($result as $node) {
-            $nodes[] = $node;
-        }
-        return $nodes;
+        return $this->xpaths[$xml] = $xpath;
     }
 
     /**
