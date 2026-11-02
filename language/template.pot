@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-01-14 08:18+0100\n"
+"POT-Creation-Date: 2026-11-03 07:56+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -17,7 +17,16 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: data/scripts/upgrade.php:42 Module.php:33
+#: data/scripts/upgrade.php:43 Module.php:60
+#, php-format
+msgid "The module %1$s requires PHP %2$s or later."
+msgstr ""
+
+#: data/scripts/upgrade.php:47 data/scripts/upgrade.php:56
+msgid "Missing requirement. Unable to upgrade."
+msgstr ""
+
+#: data/scripts/upgrade.php:52 Module.php:68
 #, php-format
 msgid "The module %1$s should be upgraded to version %2$s or later."
 msgstr ""
@@ -28,29 +37,29 @@ msgstr ""
 msgid "%s (copy)"
 msgstr ""
 
-#: src/Stdlib/Mapper.php:970
+#: src/Stdlib/Mapper.php:1760
 msgid "false"
 msgstr ""
 
-#: src/Stdlib/Mapper.php:972
+#: src/Stdlib/Mapper.php:1762
 msgid "off"
 msgstr ""
 
-#: src/Stdlib/Mapper.php:973
+#: src/Stdlib/Mapper.php:1763
 msgid "true"
 msgstr ""
 
-#: src/Stdlib/Mapper.php:975
+#: src/Stdlib/Mapper.php:1765
 msgid "on"
 msgstr ""
 
-#: view/mapper/admin/index/add.phtml:31 view/mapper/admin/index/add.phtml:34
+#: view/mapper/admin/index/add.phtml:24 view/mapper/admin/index/add.phtml:27
 msgid "Create new mapping"
 msgstr ""
 
-#: view/mapper/admin/index/add.phtml:31 view/mapper/admin/index/browse.phtml:26
+#: view/mapper/admin/index/add.phtml:24 view/mapper/admin/index/browse.phtml:26
 #: view/mapper/admin/index/delete.phtml:22
-#: view/mapper/admin/index/edit.phtml:35 view/mapper/admin/index/show.phtml:35
+#: view/mapper/admin/index/edit.phtml:24 view/mapper/admin/index/show.phtml:26
 msgid "Mapper"
 msgstr ""
 
@@ -75,7 +84,7 @@ msgid "Last modified"
 msgstr ""
 
 #: view/mapper/admin/index/browse.phtml:62
-#: view/mapper/admin/index/show.phtml:42
+#: view/mapper/admin/index/show.phtml:33
 msgid "Copy"
 msgstr ""
 
@@ -104,24 +113,49 @@ msgstr ""
 msgid "Are you sure you want to delete this mapping?"
 msgstr ""
 
-#: view/mapper/admin/index/edit.phtml:35 view/mapper/admin/index/edit.phtml:38
+#: view/mapper/admin/index/edit.phtml:24 view/mapper/admin/index/edit.phtml:27
 msgid "Edit mapping"
 msgstr ""
 
-#: view/mapper/admin/index/show.phtml:35
+#: view/mapper/admin/index/show.phtml:26
 msgid "Show mapping"
 msgstr ""
 
-#: data/scripts/upgrade.php:111
+#: data/scripts/upgrade.php:122
 msgid ""
 "Upgraded {count} mapping(s): fixed [mapping]/[default] sections and "
 "normalized syntax."
 msgstr ""
 
-#: data/scripts/upgrade.php:236
+#: data/scripts/upgrade.php:281
 msgid ""
 "Upgraded {count} mapping(s): updated inheritance paths after folder "
 "reorganization."
+msgstr ""
+
+#: data/scripts/upgrade.php:325
+msgid "Fixed {count} mapping(s) with circular inheritance references."
+msgstr ""
+
+#: data/scripts/upgrade.php:339
+msgid "Migrated xslt processor setting from BulkImport to Mapper."
+msgstr ""
+
+#: data/scripts/upgrade.php:354
+msgid "The custom xslt processor command is used again (mode \"custom\")."
+msgstr ""
+
+#: data/scripts/upgrade.php:417
+msgid ""
+"For security, the files of the mappings should be inside the directory "
+"\"data/mapping\" of the module or \"files/mapping\", else they are skipped. "
+"Move the files of these mappings: {mappings}."
+msgstr ""
+
+#: data/scripts/upgrade.php:468
+msgid ""
+"The ini lines are now split on the first sign \"=\" outside of brackets and "
+"quotes, not on the last one. Check these lines of mappings: {lines}."
 msgstr ""
 
 #: data/mapping/automap.php:16
@@ -580,23 +614,95 @@ msgstr ""
 msgid "default zoom"
 msgstr ""
 
-#: Module.php:79
+#: Module.php:100
+msgid ""
+"Mapper: no external xslt processor detected. Install libsaxonhe-java (Debian/"
+"Ubuntu) or saxon (Fedora/RHEL) for xslt 2/3 support."
+msgstr ""
+
+#: Module.php:106
+msgid "Mapper: detected xslt processor (auto mode): {command}"
+msgstr ""
+
+#: Module.php:208
 msgid "Mapper: Migrated {count} mappings from BulkImport."
 msgstr ""
 
-#: Module.php:85
+#: Module.php:214
 msgid "Mapper: Error during migration from BulkImport: {error}"
 msgstr ""
 
-#: src/Mvc/Controller/Plugin/MapperConfigList.php:68
+#: src/Mvc/Controller/Plugin/MapperConfigList.php:70
 msgid "User mapping files"
 msgstr ""
 
-#: src/Mvc/Controller/Plugin/MapperConfigList.php:72
+#: src/Mvc/Controller/Plugin/MapperConfigList.php:74
 msgid "Module mapping files"
 msgstr ""
 
-#: src/Form/Element/MapperSelect.php:82
+#: src/Form/ConfigForm.php:15
+#, php-format
+msgid "Detected on this server: %s"
+msgstr ""
+
+#: src/Form/ConfigForm.php:16
+msgid ""
+"No external xslt processor detected on this server. Install libsaxonhe-java "
+"(Debian/Ubuntu) or saxon (Fedora/RHEL) for xslt 2/3 support."
+msgstr ""
+
+#: src/Form/ConfigForm.php:23
+msgid "XSLT processor"
+msgstr ""
+
+#: src/Form/ConfigForm.php:26
+msgid "Auto-detect (recommended)"
+msgstr ""
+
+#: src/Form/ConfigForm.php:27
+msgid "Custom command"
+msgstr ""
+
+#: src/Form/ConfigForm.php:28
+msgid "Disabled (use PHP internal xslt 1)"
+msgstr ""
+
+#: src/Form/ConfigForm.php:40
+msgid "Custom xslt processor command"
+msgstr ""
+
+#: src/Form/ConfigForm.php:41
+#, php-format
+msgid ""
+"Used only when mode is \"Custom\". Use \"%1$s\" (input), \"%2$s\" "
+"(stylesheet), \"%3$s\" (output), unescaped."
+msgstr ""
+
+#: src/Form/ConfigForm.php:53
+msgid "Max duration of the external xslt processor (seconds)"
+msgstr ""
+
+#: src/Form/ConfigForm.php:54
+msgid "Set 0 for no limit."
+msgstr ""
+
+#: src/Form/ConfigForm.php:66
+msgid "Max size of a remote file (megabytes)"
+msgstr ""
+
+#: src/Form/ConfigForm.php:67
+msgid "Limit of the remote xml files to import. Set 0 for no limit."
+msgstr ""
+
+#: src/Form/ConfigForm.php:79
+msgid "Max idle duration of a download (seconds)"
+msgstr ""
+
+#: src/Form/ConfigForm.php:80
+msgid "Set 0 to use the default value of php."
+msgstr ""
+
+#: src/Form/Element/MapperSelect.php:61
 msgid "File mappings"
 msgstr ""
 
@@ -610,88 +716,111 @@ msgid ""
 "details."
 msgstr ""
 
-#: src/Controller/Admin/IndexController.php:145
+#: src/Controller/Admin/IndexController.php:144
 msgid "Mapping successfully saved"
 msgstr ""
 
-#: src/Controller/Admin/IndexController.php:148
+#: src/Controller/Admin/IndexController.php:147
 msgid "Save of mapping failed"
 msgstr ""
 
-#: src/Controller/Admin/IndexController.php:200
+#: src/Controller/Admin/IndexController.php:199
 msgid "Mapping successfully deleted"
 msgstr ""
 
-#: src/Controller/Admin/IndexController.php:202
+#: src/Controller/Admin/IndexController.php:201
 msgid "Delete of mapping failed"
 msgstr ""
 
-#: src/Stdlib/ProcessXslt.php:101
+#: src/Stdlib/FilterTrait.php:503
+#, php-format
+msgid ""
+"Mapper: table \"%s\" is not bijective; %d value(s) map to multiple keys, "
+"first wins for table_reverse."
+msgstr ""
+
+#: src/Stdlib/ProcessXslt.php:123
 msgid "Stylesheet not found: {stylesheet}."
 msgstr ""
 
-#: src/Stdlib/ProcessXslt.php:109
+#: src/Stdlib/ProcessXslt.php:131
 msgid "Stylesheet not readable: {stylesheet}."
 msgstr ""
 
-#: src/Stdlib/ProcessXslt.php:124
+#: src/Stdlib/ProcessXslt.php:146
 msgid "The remote file {url} is not readable or empty."
 msgstr ""
 
-#: src/Stdlib/ProcessXslt.php:132
+#: src/Stdlib/ProcessXslt.php:154
 msgid "The input file {filepath} is not readable or empty."
 msgstr ""
 
-#: src/Stdlib/ProcessXslt.php:169
+#: src/Stdlib/ProcessXslt.php:191
 msgid "The xml content is empty."
 msgstr ""
 
-#: src/Stdlib/ProcessXslt.php:183
+#: src/Stdlib/ProcessXslt.php:205
 msgid "Unable to create a temporary input file."
 msgstr ""
 
-#: src/Stdlib/ProcessXslt.php:194
+#: src/Stdlib/ProcessXslt.php:216
 msgid "Unable to create a temporary stylesheet file."
 msgstr ""
 
-#: src/Stdlib/ProcessXslt.php:309
+#: src/Stdlib/ProcessXslt.php:322
+msgid "The file {url} is larger than {size} bytes."
+msgstr ""
+
+#: src/Stdlib/ProcessXslt.php:346
 msgid "Php xsl extension is not loaded."
 msgstr ""
 
-#: src/Stdlib/ProcessXslt.php:317 src/Stdlib/ProcessXslt.php:449
+#: src/Stdlib/ProcessXslt.php:354 src/Stdlib/ProcessXslt.php:479
 msgid "Unable to create a temporary file."
 msgstr ""
 
-#: src/Stdlib/ProcessXslt.php:340
+#: src/Stdlib/ProcessXslt.php:377
 msgid "Xsl import error for {input} with {sheet}: {errors}"
 msgstr ""
 
-#: src/Stdlib/ProcessXslt.php:357 src/Stdlib/ProcessXslt.php:371
-#: src/Stdlib/ProcessXslt.php:472 src/Stdlib/ProcessXslt.php:484
+#: src/Stdlib/ProcessXslt.php:394 src/Stdlib/ProcessXslt.php:408
+#: src/Stdlib/ProcessXslt.php:540 src/Stdlib/ProcessXslt.php:558
 msgid "Xsl transformation error for {input} with {sheet}: {errors}"
 msgstr ""
 
-#: src/Stdlib/ProcessXslt.php:401
+#: src/Stdlib/ProcessXslt.php:439
 msgid ""
 "Could not load {filepath}. Check access rights for this folder and sub-"
 "folders. {errors}"
 msgstr ""
 
-#: src/Stdlib/ProcessXslt.php:410
-msgid "The file {filepath} is empty."
-msgstr ""
-
-#: src/Stdlib/ProcessXslt.php:425
+#: src/Stdlib/ProcessXslt.php:455
 msgid "Invalid xml in {file}: {errors}"
 msgstr ""
 
-#: src/Stdlib/MapperConfig.php:1075
+#: src/Stdlib/ProcessXslt.php:548
+msgid "Xsl transformation messages for {input} with {sheet}: {messages}"
+msgstr ""
+
+#: src/Stdlib/MapperConfig.php:800
+msgid "PHP mapping file \"{file}\" is allowed only in the module."
+msgstr ""
+
+#: src/Stdlib/MapperConfig.php:808
+msgid "PHP mapping file \"{file}\" must return an array."
+msgstr ""
+
+#: src/Stdlib/MapperConfig.php:884
+msgid "Invalid JSON in mapping \"{name}\": {error}"
+msgstr ""
+
+#: src/Stdlib/MapperConfig.php:1013
 msgid ""
 "Mapping \"{name}\": The [default] section is deprecated. Move its content to "
 "[maps] section. Maps without a source path are automatically treated as "
 "default maps."
 msgstr ""
 
-#: src/Stdlib/MapperConfig.php:1093
+#: src/Stdlib/MapperConfig.php:1031
 msgid "Mapping \"{name}\": {warning}"
 msgstr ""
