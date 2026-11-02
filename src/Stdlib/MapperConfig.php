@@ -810,21 +810,12 @@ class MapperConfig
 
         if (empty($mappingOrRef)) {
             $mapping = self::EMPTY_MAPPING;
-        } elseif (is_array($mappingOrRef)) {
-            $mapping = isset($mappingOrRef['info'])
-                ? $this->parseNormalizedArray($mappingOrRef, $options)
-                : $this->parseMapList($mappingOrRef, $options);
         } else {
-            $content = $this->loadMappingContent((string) $mappingOrRef);
+            $content = is_array($mappingOrRef)
+                ? $mappingOrRef
+                : $this->loadMappingContent((string) $mappingOrRef);
             if ($content) {
-                // PHP files return an array directly.
-                if (is_array($content)) {
-                    $mapping = isset($content['info'])
-                        ? $this->parseNormalizedArray($content, $options)
-                        : $this->parseMapList($content, $options);
-                } else {
-                    $mapping = $this->parseContent($content, $options);
-                }
+                $mapping = $this->finalizeMapping($this->parseSource($content, $options));
             }
         }
 
@@ -931,10 +922,20 @@ class MapperConfig
     }
 
     /**
-     * Parse content string (ini, xml, or json).
+     * Parse a mapping (ini, xml or json content, or array from php), without
+     * finalization, so the inheritance is processed once by the caller.
+     *
+     * @param string|array $content
+     * @param string|null $baseDir Base directory for relative xml includes.
      */
-    protected function parseContent(string $content, array $options): array
+    protected function parseSource($content, array $options, ?string $baseDir = null): array
     {
+        if (is_array($content)) {
+            return isset($content['info'])
+                ? $this->parseNormalizedArray($content, $options)
+                : $this->parseMapList($content, $options);
+        }
+
         $content = trim($content);
         if (!strlen($content)) {
             return self::EMPTY_MAPPING;
@@ -944,7 +945,7 @@ class MapperConfig
 
         // XML format: starts with "<".
         if ($firstChar === '<') {
-            $content = $this->processXmlIncludes($content, $options);
+            $content = $this->processXmlIncludes($content, $options, 0, $baseDir);
             $mapping = $this->parseXml($content, $options);
         }
         // JSON object: starts with "{".
@@ -974,7 +975,7 @@ class MapperConfig
             $mapping = $this->parseIni($content, $options);
         }
 
-        return $this->finalizeMapping($mapping);
+        return $mapping;
     }
 
     /**
@@ -1207,18 +1208,10 @@ class MapperConfig
         }
 
         // Parse the base mapping (without storing it under a different name).
-        $baseContent = trim($baseContent);
-        if (!strlen($baseContent)) {
+        if ($baseContent === '' || $baseContent === []) {
             return $mapping;
         }
-
-        // Process includes if XML.
-        if (mb_substr($baseContent, 0, 1) === '<') {
-            $baseContent = $this->processXmlIncludes($baseContent, [], 0, dirname($baseMapperRef));
-            $baseMapping = $this->parseXml($baseContent, []);
-        } else {
-            $baseMapping = $this->parseIni($baseContent, []);
-        }
+        $baseMapping = $this->parseSource($baseContent, [], dirname($baseMapperRef));
 
         // Recursively finalize the base mapping (handles nested inheritance).
         $inheritanceChain[] = $baseMapperRef;
@@ -1719,7 +1712,7 @@ class MapperConfig
             }
         }
 
-        return $this->finalizeMapping($mapping);
+        return $mapping;
     }
 
     /**
