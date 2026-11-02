@@ -269,17 +269,15 @@ class MapperConfigList extends AbstractPlugin
      */
     protected function checkMappingFile(\SplFileInfo $fileinfo): ?string
     {
-        if ($this->mappingDirectory === false) {
-            return null;
-        }
-
         $realPath = $fileinfo->getRealPath();
-        if ($realPath === false) {
+        $realDirectory = realpath((string) $this->mappingDirectory);
+        if ($realPath === false || $realDirectory === false) {
             return null;
         }
 
-        // Security: ensure file is within the mapping directory.
-        if (strpos($realPath, $this->mappingDirectory) !== 0) {
+        // Security: ensure file is within the mapping directory, that may be
+        // a symlink.
+        if (strpos($realPath, $realDirectory . DIRECTORY_SEPARATOR) !== 0) {
             return null;
         }
 
