@@ -1288,46 +1288,54 @@ class MapperConfig
             }
 
             $map = $this->parseIniLine($line, $section, $options);
-            if ($map === null) {
-                continue;
-            }
-
-            if (in_array($section, self::KEYVALUE_SECTIONS)) {
-                if (isset($map[self::MAP_FROM]) && is_scalar($map[self::MAP_FROM])) {
-                    $key = $map[self::MAP_FROM];
-                    // Handle array notation: key[] = value
-                    if (mb_substr($key, -2) === '[]') {
-                        $key = mb_substr($key, 0, -2);
-                        $mapping[$section][$key][] = $map[self::MAP_TO];
-                    } else {
-                        $mapping[$section][$key] = $map[self::MAP_TO];
-                    }
-                }
-            } elseif ($section === self::SECTION_TABLES) {
-                if (isset($map[self::MAP_FROM]) && isset($map[self::MAP_TO])) {
-                    // Tables format: table.key = value
-                    // MAP_FROM may be string or array.
-                    $tablePath = is_array($map[self::MAP_FROM])
-                        ? ($map[self::MAP_FROM]['path'] ?? '')
-                        : $map[self::MAP_FROM];
-                    if (is_string($tablePath)) {
-                        $dotPos = mb_strpos($tablePath, '.');
-                        if ($dotPos !== false) {
-                            $tableName = mb_substr($tablePath, 0, $dotPos);
-                            $tableKey = mb_substr($tablePath, $dotPos + 1);
-                            $tableValue = is_array($map[self::MAP_TO])
-                                ? ($map[self::MAP_TO]['field'] ?? '')
-                                : $map[self::MAP_TO];
-                            $mapping[self::SECTION_TABLES][$tableName][$tableKey] = $tableValue;
-                        }
-                    }
-                }
-            } else {
-                $mapping[$section][] = $map;
+            if ($map !== null) {
+                $this->storeIniMap($mapping, $section, $map);
             }
         }
 
         return $mapping;
+    }
+
+    /**
+     * Store a parsed ini line in its section of the mapping.
+     */
+    protected function storeIniMap(array &$mapping, string $section, array $map): void
+    {
+        if (in_array($section, self::KEYVALUE_SECTIONS)) {
+            if (isset($map[self::MAP_FROM]) && is_scalar($map[self::MAP_FROM])) {
+                $key = $map[self::MAP_FROM];
+                // Handle array notation: key[] = value
+                if (mb_substr($key, -2) === '[]') {
+                    $mapping[$section][mb_substr($key, 0, -2)][] = $map[self::MAP_TO];
+                } else {
+                    $mapping[$section][$key] = $map[self::MAP_TO];
+                }
+            }
+            return;
+        }
+
+        if ($section !== self::SECTION_TABLES) {
+            $mapping[$section][] = $map;
+            return;
+        }
+
+        // Tables format: table.key = value, where the source may be a string
+        // or an array.
+        if (!isset($map[self::MAP_FROM]) || !isset($map[self::MAP_TO])) {
+            return;
+        }
+        $tablePath = is_array($map[self::MAP_FROM])
+            ? ($map[self::MAP_FROM]['path'] ?? '')
+            : $map[self::MAP_FROM];
+        $dotPos = is_string($tablePath) ? mb_strpos($tablePath, '.') : false;
+        if ($dotPos === false) {
+            return;
+        }
+        $tableName = mb_substr($tablePath, 0, $dotPos);
+        $tableKey = mb_substr($tablePath, $dotPos + 1);
+        $mapping[self::SECTION_TABLES][$tableName][$tableKey] = is_array($map[self::MAP_TO])
+            ? ($map[self::MAP_TO]['field'] ?? '')
+            : $map[self::MAP_TO];
     }
 
     /**
@@ -1503,10 +1511,34 @@ class MapperConfig
             $xml = new \SimpleXMLElement($content, LIBXML_NONET);
         } catch (\Throwable $e) {
             $mapping['has_error'] = true;
-            $this->logger->err('Invalid xml mapping: ' . $e->getMessage());
+            $this->logger->err(
+                'Invalid xml mapping "{name}": {error}', // @translate
+                ['name' => $this->currentName, 'error' => $e->getMessage()]
+            );
             return $mapping;
         }
 
+        $this->parseXmlInfo($mapping, $xml);
+        $this->parseXmlParams($mapping, $xml);
+
+        // Handle <maps> container (recommended) and/or direct <map> elements.
+        // Both are cumulative (like <param>).
+        if (isset($xml->maps)) {
+            foreach ($xml->maps->map as $mapElement) {
+                $mapping[self::SECTION_MAPS][] = $this->parseXmlMap($mapElement);
+            }
+        }
+        foreach ($xml->map as $mapElement) {
+            $mapping[self::SECTION_MAPS][] = $this->parseXmlMap($mapElement);
+        }
+
+        $this->parseXmlTables($mapping, $xml);
+
+        return $mapping;
+    }
+
+    protected function parseXmlInfo(array &$mapping, \SimpleXMLElement $xml): void
+    {
         if (isset($xml->info)) {
             foreach ($xml->info->children() as $element) {
                 $name = $element->getName();
@@ -1518,7 +1550,10 @@ class MapperConfig
                 }
             }
         }
+    }
 
+    protected function parseXmlParams(array &$mapping, \SimpleXMLElement $xml): void
+    {
         // Handle <params> container (recommended) or direct <param> elements.
         if (isset($xml->params)) {
             foreach ($xml->params->children() as $element) {
@@ -1532,18 +1567,10 @@ class MapperConfig
                 $mapping['params'][$name] = (string) $element;
             }
         }
+    }
 
-        // Handle <maps> container (recommended) and/or direct <map> elements.
-        // Both are cumulative (like <param>).
-        if (isset($xml->maps)) {
-            foreach ($xml->maps->map as $mapElement) {
-                $mapping[self::SECTION_MAPS][] = $this->parseXmlMap($mapElement);
-            }
-        }
-        foreach ($xml->map as $mapElement) {
-            $mapping[self::SECTION_MAPS][] = $this->parseXmlMap($mapElement);
-        }
-
+    protected function parseXmlTables(array &$mapping, \SimpleXMLElement $xml): void
+    {
         // Handle <tables> container (recommended) and/or direct <table> elements.
         // Both are cumulative (like <param>).
         $allTables = [];
@@ -1579,8 +1606,6 @@ class MapperConfig
                 }
             }
         }
-
-        return $mapping;
     }
 
     /**
