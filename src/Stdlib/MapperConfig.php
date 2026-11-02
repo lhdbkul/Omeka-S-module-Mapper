@@ -53,6 +53,8 @@ use Omeka\Api\Manager as ApiManager;
 
 class MapperConfig
 {
+    use DatabaseMapperTrait;
+
     // =========================================================================
     // Mapping Section Constants (Level 1: top-level sections of a mapping)
     // =========================================================================
@@ -847,24 +849,9 @@ class MapperConfig
     protected function loadMappingContent(string $reference)
     {
         // Database reference: "mapping:5" (by ID) or "mapping:My Mapping" (by label).
-        if (mb_substr($reference, 0, 8) === 'mapping:') {
-            $identifier = mb_substr($reference, 8);
-            try {
-                // Numeric = ID, otherwise = label.
-                if (ctype_digit($identifier)) {
-                    $mapper = $this->api->read('mappers', ['id' => (int) $identifier])->getContent();
-                } else {
-                    // Search by label.
-                    $mappers = $this->api->search('mappers', ['label' => $identifier, 'limit' => 1])->getContent();
-                    $mapper = $mappers[0] ?? null;
-                    if (!$mapper) {
-                        return null;
-                    }
-                }
-                return $mapper->mapping();
-            } catch (\Throwable $e) {
-                return null;
-            }
+        if ($this->isDatabaseReference($reference)) {
+            $mapper = $this->readDatabaseMapper($reference);
+            return $mapper ? $mapper->mapping() : null;
         }
 
         // File reference with prefix, that cannot get out of its directory.

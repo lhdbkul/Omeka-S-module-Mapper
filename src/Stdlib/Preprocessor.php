@@ -22,6 +22,8 @@ use Omeka\Api\Manager as ApiManager;
 
 class Preprocessor
 {
+    use DatabaseMapperTrait;
+
     /**
      * @var Logger
      */
@@ -150,30 +152,17 @@ class Preprocessor
     protected function loadTransformation(string $reference, ?string $context = null): ?array
     {
         // Database reference: "mapping:5" (by ID) or "mapping:label" (by label).
-        if (mb_substr($reference, 0, 8) === 'mapping:' && $this->api) {
-            $identifier = mb_substr($reference, 8);
-            try {
-                // Numeric = ID, otherwise = label.
-                if (ctype_digit($identifier)) {
-                    $mapper = $this->api->read('mappers', ['id' => (int) $identifier])->getContent();
-                } else {
-                    $mappers = $this->api->search('mappers', ['label' => $identifier, 'limit' => 1])->getContent();
-                    $mapper = $mappers[0] ?? null;
-                    if (!$mapper) {
-                        return null;
-                    }
-                }
-                $label = $mapper->label();
-                return [
+        if ($this->isDatabaseReference($reference)) {
+            $mapper = $this->readDatabaseMapper($reference);
+            return $mapper
+                ? [
                     'content' => $mapper->mapping(),
                     'filepath' => null,
-                    'type' => $this->getTypeFromExtension($label),
+                    'type' => $this->getTypeFromExtension($mapper->label()),
                     'source' => 'database',
                     'reference' => $reference,
-                ];
-            } catch (\Throwable $e) {
-                return null;
-            }
+                ]
+                : null;
         }
 
         // File reference: "module:ead/transform.xsl", "user:custom.xsl", or
