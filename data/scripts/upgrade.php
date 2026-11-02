@@ -23,7 +23,8 @@ use Omeka\Module\Exception\ModuleCannotInstallException;
  * @var \Omeka\Mvc\Controller\Plugin\Messenger $messenger
  */
 $plugins = $services->get('ControllerPluginManager');
-$url = $services->get('ViewHelperManager')->get('url');
+$helpers = $services->get('ViewHelperManager');
+$url = $helpers->get('url');
 $api = $plugins->get('api');
 $logger = $services->get('Omeka\Logger');
 $settings = $services->get('Omeka\Settings');
@@ -332,11 +333,142 @@ if (version_compare((string) $oldVersion, '3.4.2', '<')) {
     $xsltProcessor = $settings->get('bulkimport_xslt_processor');
     if ($xsltProcessor) {
         $settings->set('mapper_xslt_processor', $xsltProcessor);
+        $settings->set('mapper_xslt_processor_mode', 'custom');
         $settings->delete('bulkimport_xslt_processor');
         $message = new PsrMessage(
             'Migrated xslt processor setting from BulkImport to Mapper.', // @translate
         );
         $messenger->addSuccess($message);
         $logger->notice($message->getMessage(), $message->getContext());
+    }
+}
+
+if (version_compare((string) $oldVersion, '3.4.10', '<')) {
+    // Since version 3.4.6, the command is used only with the mode "custom",
+    // but the mode was not set for the existing commands.
+    if ($settings->get('mapper_xslt_processor')
+        && $settings->get('mapper_xslt_processor_mode') === null
+    ) {
+        $settings->set('mapper_xslt_processor_mode', 'custom');
+        $message = new PsrMessage(
+            'The custom xslt processor command is used again (mode "custom").', // @translate
+        );
+        $messenger->addSuccess($message);
+        $logger->notice($message->getMessage(), $message->getContext());
+    }
+
+    // The file references cannot get out of the mapping directories anymore,
+    // so list the mappings that use files outside of them.
+    if (!class_exists(\Mapper\Stdlib\MappingPaths::class)) {
+        require_once dirname(__DIR__, 2) . '/src/Stdlib/MappingPaths.php';
+    }
+    $mappingPaths = new \Mapper\Stdlib\MappingPaths(dirname(__DIR__) . '/mapping', $basePath . '/mapping');
+    // Paths used before, without check.
+    $unconfinedPaths = function (string $reference) use ($mappingPaths): array {
+        if (strncmp($reference, 'module:', 7) === 0) {
+            return [$mappingPaths->modulePath() . '/' . substr($reference, 7)];
+        }
+        if (strncmp($reference, 'user:', 5) === 0) {
+            return [$mappingPaths->userPath() . '/' . substr($reference, 5)];
+        }
+        if (strpos($reference, '/') === 0) {
+            return [$reference];
+        }
+        return [
+            $mappingPaths->modulePath() . '/common/' . $reference,
+            $mappingPaths->modulePath() . '/' . $reference,
+        ];
+    };
+    $mappings = [];
+    foreach ($connection->executeQuery('SELECT `id`, `mapping` FROM `mapper` ORDER BY `id`')->fetchAllKeyValue() as $id => $mapping) {
+        $mappings['#' . $id] = $mapping;
+    }
+    if (is_dir($mappingPaths->userPath())) {
+        $iterator = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($mappingPaths->userPath(), \FilesystemIterator::SKIP_DOTS));
+        foreach ($iterator as $file) {
+            if ($file->isFile() && in_array(strtolower($file->getExtension()), ['ini', 'xml'], true)) {
+                $mappings['user:' . substr($file->getPathname(), strlen($mappingPaths->userPath()) + 1)] = (string) file_get_contents($file->getPathname());
+            }
+        }
+    }
+    $outsides = [];
+    foreach ($mappings as $name => $mapping) {
+        preg_match_all(
+            '~^\s*(?:preprocess|postprocess|mapper)(?:\[\])?\s*=\s*"?([^"\r\n]+?)"?\s*$|<(?:preprocess|postprocess|mapper)>\s*([^<]+?)\s*</|<include\s+mapping\s*=\s*["\']([^"\']+)["\']~m',
+            (string) $mapping,
+            $matches,
+            PREG_SET_ORDER
+        );
+        foreach ($matches as $match) {
+            $reference = trim(end($match));
+            if ($reference === '' || strncmp($reference, 'mapping:', 8) === 0 || $mappingPaths->resolve($reference)) {
+                continue;
+            }
+            foreach ($unconfinedPaths($reference) as $filepath) {
+                if (is_file($filepath)) {
+                    $outsides[] = sprintf('%s (%s)', $name, $reference);
+                    break;
+                }
+            }
+        }
+    }
+    if ($outsides) {
+        $message = new PsrMessage(
+            'For security, the files of the mappings should be inside the directory "data/mapping" of the module or "files/mapping", else they are skipped. Move the files of these mappings: {mappings}.', // @translate
+            ['mappings' => implode(', ', array_unique($outsides))]
+        );
+        $messenger->addWarning($message);
+        $logger->warn($message->getMessage(), $message->getContext());
+    }
+
+    // The ini lines are split on the first "=" outside of brackets and quotes,
+    // no more on the last one, so list the lines that are read differently.
+    $separators = function (string $line): array {
+        $depth = 0;
+        $quote = null;
+        $positions = [];
+        $length = strlen($line);
+        for ($i = 0; $i < $length; $i++) {
+            $char = $line[$i];
+            if ($quote !== null) {
+                if ($char === $quote) {
+                    $quote = null;
+                }
+            } elseif ($char === '"' || $char === "'") {
+                $quote = $char;
+            } elseif ($char === '[') {
+                ++$depth;
+            } elseif ($char === ']') {
+                $depth = max(0, $depth - 1);
+            } elseif ($char === '=' && $depth === 0) {
+                $positions[] = $i;
+            }
+        }
+        return $positions;
+    };
+    $changedLines = [];
+    foreach ($mappings as $name => $mapping) {
+        $mapping = trim((string) $mapping);
+        if ($mapping === '' || in_array($mapping[0], ['<', '{'], true) || preg_match('~^\[\s*[\[{"\]]~', $mapping)) {
+            continue;
+        }
+        foreach (explode("\n", $mapping) as $line) {
+            $line = trim($line);
+            if ($line === '' || $line[0] === ';' || ($line[0] === '[' && substr($line, -1) === ']')) {
+                continue;
+            }
+            $positions = $separators($line);
+            if (count($positions) > 1) {
+                $changedLines[] = sprintf('%s (%s)', $name, $line);
+            }
+        }
+    }
+    if ($changedLines) {
+        $message = new PsrMessage(
+            'The ini lines are now split on the first sign "=" outside of brackets and quotes, not on the last one. Check these lines of mappings: {lines}.', // @translate
+            ['lines' => implode(', ', $changedLines)]
+        );
+        $messenger->addWarning($message);
+        $logger->warn($message->getMessage(), $message->getContext());
     }
 }
