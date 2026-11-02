@@ -46,6 +46,13 @@ class ProcessXslt
      */
     protected $originalUrl;
 
+    /**
+     * Max duration of the external command, in seconds.
+     *
+     * @var int
+     */
+    protected $timeout = 600;
+
     public function __construct(
         Logger $logger,
         ?string $command = null,
@@ -496,19 +503,28 @@ class ProcessXslt
                 }
             }
         }
-        $result = shell_exec($command . ' 2>&1 1>&-');
-
-        // In shell, empty result is success.
-        if (!empty($result)) {
+        // The result depends on the exit code: the processors may output
+        // messages that are not errors, for example the warnings of java.
+        $result = $this->runCommand($command);
+        if ($result['exit_code'] !== 0) {
             if (file_exists($output)) {
                 @unlink($output);
             }
+            $errors = $result['timed_out']
+                ? sprintf('The command was stopped after %d seconds.', $this->timeout)
+                : (trim($result['errors']) ?: sprintf('The command failed with exit code %d.', $result['exit_code']));
             $message = new PsrMessage(
                 'Xsl transformation error for {input} with {sheet}: {errors}', // @translate
-                ['input' => $this->formatFileRef($filepath), 'sheet' => $this->formatFileRef($stylesheet), 'errors' => $result]
+                ['input' => $this->formatFileRef($filepath), 'sheet' => $this->formatFileRef($stylesheet), 'errors' => $errors]
             );
             $this->logger->err($message->getMessage(), $message->getContext());
             throw new Exception((string) $message);
+        }
+        if (trim($result['errors']) !== '') {
+            $this->logger->info(
+                'Xsl transformation messages for {input} with {sheet}: {messages}', // @translate
+                ['input' => $this->formatFileRef($filepath), 'sheet' => $this->formatFileRef($stylesheet), 'messages' => trim($result['errors'])]
+            );
         }
 
         if (!file_exists($output) || !filesize($output)) {
@@ -526,6 +542,61 @@ class ProcessXslt
         @chmod($output, 0640);
 
         return $output;
+    }
+
+    /**
+     * Run a shell command with a timeout and get its exit code and errors.
+     *
+     * @return array{exit_code: int, errors: string, timed_out: bool}
+     */
+    protected function runCommand(string $command): array
+    {
+        $descriptors = [
+            0 => ['file', '/dev/null', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ];
+        $process = proc_open($command, $descriptors, $pipes);
+        if (!is_resource($process)) {
+            return ['exit_code' => -1, 'errors' => 'Unable to run the command.', 'timed_out' => false];
+        }
+
+        stream_set_blocking($pipes[1], false);
+        stream_set_blocking($pipes[2], false);
+        $errors = '';
+        $timedOut = false;
+        $start = microtime(true);
+        while (true) {
+            $read = [$pipes[1], $pipes[2]];
+            $write = $except = null;
+            if (@stream_select($read, $write, $except, 1)) {
+                foreach ($read as $pipe) {
+                    $chunk = (string) fread($pipe, 8192);
+                    // The standard output is not used: the output is a file.
+                    if ($pipe === $pipes[2]) {
+                        $errors .= $chunk;
+                    }
+                }
+            }
+            $status = proc_get_status($process);
+            if (!$status['running']) {
+                $exitCode = (int) $status['exitcode'];
+                break;
+            }
+            if (microtime(true) - $start > $this->timeout) {
+                proc_terminate($process, 9);
+                $timedOut = true;
+                $exitCode = -1;
+                break;
+            }
+        }
+
+        $errors .= (string) stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        proc_close($process);
+
+        return ['exit_code' => $exitCode, 'errors' => $errors, 'timed_out' => $timedOut];
     }
 
     /**
@@ -589,6 +660,20 @@ class ProcessXslt
         }
 
         return implode('; ', $messages);
+    }
+
+    /**
+     * Set the max duration of the external command, in seconds.
+     */
+    public function setTimeout(int $timeout): self
+    {
+        $this->timeout = max(1, $timeout);
+        return $this;
+    }
+
+    public function getTimeout(): int
+    {
+        return $this->timeout;
     }
 
     /**
