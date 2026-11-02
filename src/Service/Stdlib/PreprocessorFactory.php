@@ -19,11 +19,7 @@ class PreprocessorFactory implements FactoryInterface
         $basePath = dirname(__DIR__, 3) . '/data/mapping';
 
         // User base path for user mapping files (files/mapping/).
-        $config = $services->get('Config');
-        $userBasePath = $config['file_store']['local']['base_path'] ?? null;
-        if ($userBasePath) {
-            $userBasePath .= '/mapping';
-        }
+        $userBasePath = ($services->get('Config')['file_store']['local']['base_path'] ?: (OMEKA_PATH . '/files')) . '/mapping';
 
         return new Preprocessor($logger, $processXslt, $api, $basePath, $userBasePath);
     }
