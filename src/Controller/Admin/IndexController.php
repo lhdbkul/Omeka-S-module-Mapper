@@ -137,7 +137,6 @@ class IndexController extends AbstractActionController
                 if ($isDbMapping && $entity && $action === 'edit') {
                     $response = $this->api($form)->update('mappers', $this->params('id'), $data, [], ['isPartial' => true]);
                 } else {
-                    $data['o:owner'] = $this->identity();
                     $response = $this->api($form)->create('mappers', $data);
                 }
 

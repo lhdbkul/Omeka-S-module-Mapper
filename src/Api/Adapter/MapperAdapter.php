@@ -2,7 +2,6 @@
 
 namespace Mapper\Api\Adapter;
 
-use Doctrine\Inflector\InflectorFactory;
 use Doctrine\ORM\QueryBuilder;
 use Mapper\Api\Representation\MapperRepresentation;
 use Mapper\Entity\Mapper;
@@ -67,18 +66,24 @@ class MapperAdapter extends AbstractEntityAdapter
         }
     }
 
+    /**
+     * Only the label and the mapping are hydrated: the owner and the dates are
+     * managed by the api.
+     */
     public function hydrate(Request $request, EntityInterface $entity, ErrorStore $errorStore): void
     {
         $data = $request->getContent();
-        $inflector = InflectorFactory::create()->build();
 
-        foreach ($data as $key => $value) {
-            $posColon = strpos($key, ':');
-            $keyName = $posColon === false ? $key : substr($key, $posColon + 1);
-            $method = 'set' . ucfirst($inflector->camelize($keyName));
-            if (method_exists($entity, $method)) {
-                $entity->$method($value);
-            }
+        if ($this->shouldHydrate($request, 'o:label')) {
+            $entity->setLabel(trim((string) ($data['o:label'] ?? '')));
+        }
+
+        // The prefix of the mapping is not always the same in the callers. The
+        // mapping is kept when it is not set in an update.
+        $mappingKeys = array_intersect(['o-module-mapper:mapping', 'o-mapper:mapping', 'o:mapping'], array_keys($data));
+        if ($mappingKeys) {
+            $mapping = $data[reset($mappingKeys)];
+            $entity->setMapping(is_scalar($mapping) ? (string) $mapping : null);
         }
 
         $this->hydrateOwner($request, $entity);
