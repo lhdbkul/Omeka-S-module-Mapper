@@ -546,8 +546,31 @@ class Mapper
                 return method_exists($resource, 'source') ? $resource->source() : null;
             case 'o:media_type':
                 return method_exists($resource, 'mediaType') ? $resource->mediaType() : null;
+            case 'o:site_url':
+                return $this->siteUrls($resource);
         }
         return null;
+    }
+
+    /**
+     * Get the absolute urls of a resource in each of its sites.
+     *
+     * The url depends on the site slug and on modules like Clean Url, so it
+     * cannot be built with a pattern. A media uses the sites of its item.
+     */
+    protected function siteUrls(AbstractResourceRepresentation $resource): array
+    {
+        $siteResource = $resource instanceof \Omeka\Api\Representation\MediaRepresentation
+            ? $resource->item()
+            : $resource;
+        if (!method_exists($siteResource, 'sites') || !method_exists($resource, 'siteUrl')) {
+            return [];
+        }
+        $urls = [];
+        foreach ($siteResource->sites() as $site) {
+            $urls[] = $resource->siteUrl($site->slug(), true);
+        }
+        return $urls;
     }
 
     /**
