@@ -123,9 +123,10 @@ trait FilterTrait
 
         $this->filterVars = $filterVars;
 
-        // Build regex pattern for variable names.
+        // Build regex pattern for variable names, cached by names only, since
+        // the values change for each value.
         if (count($this->filterVars)) {
-            $serialized = serialize($this->normalizeVarsForSerialization($this->filterVars));
+            $serialized = implode("\0", array_keys($this->filterVars));
             if (!isset($varPatterns[$serialized])) {
                 $r = [];
                 foreach (array_keys($this->filterVars) as $v) {
@@ -465,13 +466,16 @@ trait FilterTrait
             return $value;
         }
 
+        // The cache is keyed by content, since another mapping may have a table
+        // with the same name.
         static $cache = [];
-        if (!isset($cache[$name])) {
-            $tables = $this->mapperConfig->getSection('tables');
-            $cache[$name] = $this->reverseTable($tables[$name] ?? [], $name);
+        $table = $this->mapperConfig->getSection('tables')[$name] ?? [];
+        $key = md5(serialize($table));
+        if (!isset($cache[$key])) {
+            $cache[$key] = $this->reverseTable($table, $name);
         }
 
-        return $cache[$name][$value] ?? $value;
+        return $cache[$key][$value] ?? $value;
     }
 
     /**
@@ -819,18 +823,5 @@ trait FilterTrait
                 : (string) $value;
         }
         return (string) $value;
-    }
-
-    /**
-     * Normalize variables for serialization (DOMNode to string).
-     */
-    protected function normalizeVarsForSerialization(array $vars): array
-    {
-        foreach ($vars as &$v) {
-            if ($v instanceof \DOMNode) {
-                $v = (string) $v->nodeValue;
-            }
-        }
-        return $vars;
     }
 }
