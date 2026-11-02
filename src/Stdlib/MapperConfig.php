@@ -1351,9 +1351,7 @@ class MapperConfig
 
         if (in_array($section, self::KEYVALUE_SECTIONS)) {
             // Strip quotes if present.
-            if ((mb_substr($to, 0, 1) === '"' && mb_substr($to, -1) === '"')
-                || (mb_substr($to, 0, 1) === "'" && mb_substr($to, -1) === "'")
-            ) {
+            if ($this->isQuoted($to)) {
                 $to = mb_substr($to, 1, -1);
             }
 
@@ -1430,10 +1428,7 @@ class MapperConfig
         $map = [self::MAP_FROM => [], self::MAP_TO => [], self::MAP_MOD => []];
 
         // Check if "to" is a raw value (quoted).
-        $isRaw = (mb_substr($to, 0, 1) === '"' && mb_substr($to, -1) === '"')
-            || (mb_substr($to, 0, 1) === "'" && mb_substr($to, -1) === "'");
-
-        if ($isRaw) {
+        if ($this->isQuoted($to)) {
             $map[self::MAP_MOD]['raw'] = mb_substr($to, 1, -1);
             $map[self::MAP_TO] = $this->parseFieldSpec($from);
             return $map;
@@ -1457,6 +1452,17 @@ class MapperConfig
         }
 
         return $map;
+    }
+
+    /**
+     * Check if a string is enclosed in single or double quotes.
+     */
+    protected function isQuoted(string $string): bool
+    {
+        $first = substr($string, 0, 1);
+        return strlen($string) >= 2
+            && ($first === '"' || $first === "'")
+            && substr($string, -1) === $first;
     }
 
     /**
