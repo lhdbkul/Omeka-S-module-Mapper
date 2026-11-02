@@ -1797,43 +1797,50 @@ class Mapper
      */
     protected function finalizeConversion(array &$resource, array $to, ?array $results): void
     {
-        static $translate = null;
-
         // Do not fill field here: it may be used for advanced update.
-        if ($results === null || empty($results)) {
+        if (empty($results)) {
             return;
-        }
-
-        if ($translate === null) {
-            $translate = [
-                'false' => $this->translator->translate('false'),
-                'no' => $this->translator->translate('no'),
-                'off' => $this->translator->translate('off'),
-                'true' => $this->translator->translate('true'),
-                'yes' => $this->translator->translate('yes'),
-                'on' => $this->translator->translate('on'),
-            ];
         }
 
         $field = $to['field'];
         $fieldType = $to['field_type'] ?? null;
         unset($to['field'], $to['field_type']);
 
-        // Convert results based on field type.
-        switch ($fieldType) {
-            default:
-                // Nothing to do: keep result as is (string or array).
-                // In particular for entities, that should be checked.
-                break;
+        $results = $this->castResults($results, $fieldType, $to);
+        if ($results === null) {
+            return;
+        }
 
+        // Convert simple values to array format with metadata from $to.
+        // This ensures datatype, language, and visibility are preserved.
+        // Skip conversion for string/strings field types - they need raw values
+        // (e.g., file, o:source, ingest_url expect raw strings, not JSON-LD).
+        if (!in_array($fieldType, ['array', 'arrays', 'string', 'strings'], true)) {
+            $results = $this->resultsToValues($results, $to);
+        }
+
+        if (empty($resource[$field])) {
+            $resource[$field] = $results;
+        } else {
+            $resource[$field] = array_merge(array_values($resource[$field]), $results);
+        }
+    }
+
+    /**
+     * Cast the results according to the type of the field.
+     *
+     * @return array|null Null when the field should be skipped.
+     */
+    protected function castResults(array $results, ?string $fieldType, array $to): ?array
+    {
+        switch ($fieldType) {
             case 'skip':
-                return;
+                return null;
 
             case 'boolean':
             case 'booleans':
-                $trueValues = [true, 1, '1', 'true', 'yes', 'on', $translate['true'], $translate['yes'], $translate['on']];
-                $falseValues = [false, 0, '0', 'false', 'no', 'off', $translate['false'], $translate['no'], $translate['off']];
-                $results = array_map(function ($v) use ($trueValues, $falseValues) {
+                [$trueValues, $falseValues] = $this->booleanValues();
+                return array_map(function ($v) use ($trueValues, $falseValues) {
                     $lower = is_string($v) ? strtolower($v) : $v;
                     if (in_array($lower, $trueValues, true)) {
                         return true;
@@ -1843,119 +1850,119 @@ class Mapper
                     }
                     return null;
                 }, $results);
-                break;
 
             case 'integer':
             case 'integers':
-                $results = array_map('intval', $results);
-                break;
+                return array_map('intval', $results);
 
             case 'string':
             case 'strings':
-                $results = array_map('strval', $results);
-                break;
+                return array_map('strval', $results);
 
             case 'datetime':
             case 'datetimes':
                 // Date time is designed to fill sql date time (created or
                 // modified), so fill as string.
-                $results = array_map(function ($v) {
-                    return $v ? substr_replace('0000-00-00 00:00:00', $v, 0, strlen($v)) : null;
-                }, $results);
-                break;
+                return array_map(fn ($v) => $v ? substr_replace('0000-00-00 00:00:00', $v, 0, strlen($v)) : null, $results);
 
             case 'array':
             case 'arrays':
                 // Some processes like xml may prepare an array directly.
                 // In that case, the value is not added as "__value".
-                $results = array_map(function ($v) use ($to) {
-                    if (is_array($v)) {
-                        return $v + $to;
-                    }
-                    $data = $to;
-                    $data['__value'] = $v;
-                    return $data;
-                }, $results);
-                break;
+                return array_map(fn ($v) => is_array($v) ? $v + $to : array_replace($to, ['__value' => $v]), $results);
+
+            default:
+                // Keep result as is (string or array), in particular for
+                // entities, that should be checked.
+                return $results;
         }
+    }
 
-        // Convert simple values to array format with metadata from $to.
-        // This ensures datatype, language, and visibility are preserved.
-        // Skip conversion for string/strings field types - they need raw values
-        // (e.g., file, o:source, ingest_url expect raw strings, not JSON-LD).
-        if ($fieldType !== 'array' && $fieldType !== 'arrays'
-            && $fieldType !== 'string' && $fieldType !== 'strings'
-        ) {
-            $datatypes = $to['datatype'] ?? [];
-            $datatype = $datatypes[0] ?? null;
-            $language = $to['language'] ?? null;
-            $isPublic = $to['is_public'] ?? null;
-            $hasMultipleDatatypes = count($datatypes) > 1;
+    /**
+     * Get the true and false values, including the translated ones.
+     *
+     * @return array[] List of true values and list of false values.
+     */
+    protected function booleanValues(): array
+    {
+        static $values = null;
+        if ($values === null) {
+            $t = fn (string $v): string => $this->translator->translate($v);
+            $values = [
+                [true, 1, '1', 'true', 'yes', 'on', $t('true'), $t('yes'), $t('on')],
+                [false, 0, '0', 'false', 'no', 'off', $t('false'), $t('no'), $t('off')],
+            ];
+        }
+        return $values;
+    }
 
-            $results = array_map(function ($v) use ($datatypes, $datatype, $hasMultipleDatatypes, $language, $isPublic) {
-                if (is_array($v)) {
-                    // Already array format, just add missing metadata.
-                    if ($datatype && !isset($v['type'])) {
-                        if ($hasMultipleDatatypes) {
-                            $v['datatype'] = $datatypes;
-                        } else {
-                            $v['type'] = $datatype;
-                        }
-                    }
-                    if ($language && !isset($v['@language'])) {
-                        $v['@language'] = $language;
-                    }
-                    if ($isPublic !== null && !isset($v['is_public'])) {
-                        $v['is_public'] = $isPublic;
-                    }
-                    return $v;
-                }
+    /**
+     * Convert the results into values with the datatype, language and
+     * visibility of the target.
+     */
+    protected function resultsToValues(array $results, array $to): array
+    {
+        $datatypes = $to['datatype'] ?? [];
+        $datatype = $datatypes[0] ?? null;
+        $language = $to['language'] ?? null;
+        $isPublic = $to['is_public'] ?? null;
+        $hasMultipleDatatypes = count($datatypes) > 1;
 
-                // Convert string value to array format.
-                $stringValue = (string) $v;
-                $result = [];
-
-                // When multiple datatypes are specified, pass
-                // the list as candidates for the processor to
-                // try in order. Don't fix the type yet.
-                if ($hasMultipleDatatypes) {
-                    $result['datatype'] = $datatypes;
-                    $result['@value'] = $stringValue;
-                } elseif ($datatype) {
-                    $result['type'] = $datatype;
-                    // Set value in appropriate key based on main type.
-                    $mainType = $this->easyMeta->dataTypeMain($datatype);
-                    if ($mainType === 'resource') {
-                        $result['value_resource_id'] = (int) $stringValue;
-                    } elseif ($mainType === 'uri') {
-                        $result['@id'] = $stringValue;
+        return array_map(function ($v) use ($datatypes, $datatype, $hasMultipleDatatypes, $language, $isPublic) {
+            if (is_array($v)) {
+                // Already array format, just add missing metadata.
+                if ($datatype && !isset($v['type'])) {
+                    if ($hasMultipleDatatypes) {
+                        $v['datatype'] = $datatypes;
                     } else {
-                        $result['@value'] = $stringValue;
+                        $v['type'] = $datatype;
                     }
-                } elseif (filter_var($stringValue, FILTER_VALIDATE_URL)) {
-                    $result['type'] = 'uri';
-                    $result['@id'] = $stringValue;
-                } else {
-                    $result['type'] = 'literal';
-                    $result['@value'] = $stringValue;
                 }
+                if ($language && !isset($v['@language'])) {
+                    $v['@language'] = $language;
+                }
+                if ($isPublic !== null && !isset($v['is_public'])) {
+                    $v['is_public'] = $isPublic;
+                }
+                return $v;
+            }
 
-                if ($language) {
-                    $result['@language'] = $language;
-                }
-                if ($isPublic !== null) {
-                    $result['is_public'] = $isPublic;
-                }
+            $result = $this->stringToValue((string) $v, $datatypes);
+            if ($language) {
+                $result['@language'] = $language;
+            }
+            if ($isPublic !== null) {
+                $result['is_public'] = $isPublic;
+            }
+            return $result;
+        }, $results);
+    }
 
-                return $result;
-            }, $results);
+    /**
+     * Convert a string into a value according to the datatypes.
+     *
+     * When multiple datatypes are specified, they are passed as candidates for
+     * the processor, that will try them in order, so the type is not fixed.
+     */
+    protected function stringToValue(string $string, array $datatypes): array
+    {
+        if (count($datatypes) > 1) {
+            return [
+                'datatype' => $datatypes,
+                '@value' => $string,
+            ];
         }
 
-        // Append to resource.
-        if (empty($resource[$field])) {
-            $resource[$field] = $results;
-        } else {
-            $resource[$field] = array_merge(array_values($resource[$field]), $results);
+        $datatype = $datatypes[0] ?? null;
+        if ($datatype) {
+            switch ($this->easyMeta->dataTypeMain($datatype)) {
+                case 'resource':
+                    return ['type' => $datatype, 'value_resource_id' => (int) $string];
+                case 'uri':
+                    return ['type' => $datatype, '@id' => $string];
+                default:
+                    return ['type' => $datatype, '@value' => $string];
+            }
         }
 
         // Deduplicate early, but revert to keep the last value, that overrides
@@ -1969,6 +1976,10 @@ class Mapper
             }
         }
          */
+
+        return filter_var($string, FILTER_VALIDATE_URL)
+            ? ['type' => 'uri', '@id' => $string]
+            : ['type' => 'literal', '@value' => $string];
     }
 
     /**
