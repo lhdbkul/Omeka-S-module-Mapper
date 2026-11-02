@@ -17,7 +17,7 @@
         </testsuite>
         <!-- MapperConfig tests (core functionality) -->
         <testsuite name="config">
-            <file>tests/MapperTest/Stdlib/MapNormalizerTest.php</file>
+            <file>tests/MapperTest/Stdlib/FieldSpecParserTest.php</file>
             <file>tests/MapperTest/Stdlib/MapperConfigTest.php</file>
             <file>tests/MapperTest/Stdlib/AutomapFieldsTest.php</file>
         </testsuite>
@@ -64,7 +64,7 @@
         <testsuite name="mapping">
             <file>tests/MapperTest/Stdlib/FilterTraitTest.php</file>
             <file>tests/MapperTest/Stdlib/PatternParserTest.php</file>
-            <file>tests/MapperTest/Stdlib/MapNormalizerTest.php</file>
+            <file>tests/MapperTest/Stdlib/FieldSpecParserTest.php</file>
             <file>tests/MapperTest/Stdlib/MapperConfigTest.php</file>
             <file>tests/MapperTest/Stdlib/AutomapFieldsTest.php</file>
             <file>tests/MapperTest/Stdlib/ProcessXsltTest.php</file>

@@ -17,7 +17,7 @@
  * - Old pattern detection with warnings
  * - Multiple targets with | separator
  *
- * Uses MapNormalizer::parseFieldSpec() for field parsing, which handles
+ * Uses FieldSpecParser::parse() for field parsing, which handles
  * quoted custom vocab labels with spaces (common in spreadsheet headers).
  *
  * Migrated from BulkImport\Mvc\Controller\Plugin\AutomapFields.
@@ -55,9 +55,9 @@ class AutomapFields
     protected $easyMeta;
 
     /**
-     * @var MapNormalizer
+     * @var FieldSpecParser
      */
-    protected $mapNormalizer;
+    protected $fieldSpecParser;
 
     /**
      * @var TranslatorInterface|null
@@ -82,14 +82,14 @@ class AutomapFields
     public function __construct(
         ApiManager $api,
         EasyMeta $easyMeta,
-        MapNormalizer $mapNormalizer,
+        FieldSpecParser $fieldSpecParser,
         ?TranslatorInterface $translator = null,
         ?Logger $logger = null,
         array $map = []
     ) {
         $this->api = $api;
         $this->easyMeta = $easyMeta;
-        $this->mapNormalizer = $mapNormalizer;
+        $this->fieldSpecParser = $fieldSpecParser;
         $this->translator = $translator;
         $this->logger = $logger;
         $this->map = $map;
@@ -214,7 +214,7 @@ class AutomapFields
     /**
      * Parse a field specification string.
      *
-     * Extracts the pattern part and delegates field parsing to MapNormalizer.
+     * Extracts the pattern part and delegates field parsing to FieldSpecParser.
      *
      * @return array With keys: field, datatype, language, is_public, pattern.
      */
@@ -229,8 +229,7 @@ class AutomapFields
             $spec = trim(mb_substr($spec, 0, $tildePos));
         }
 
-        // Use MapNormalizer for field parsing.
-        $parsed = $this->mapNormalizer->parseFieldSpec($spec);
+        $parsed = $this->fieldSpecParser->parse($spec);
 
         return [
             'field' => $parsed['field'],

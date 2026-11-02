@@ -4,7 +4,7 @@ namespace Mapper\Service\Stdlib;
 
 use Psr\Container\ContainerInterface;
 use Laminas\ServiceManager\Factory\FactoryInterface;
-use Mapper\Stdlib\MapNormalizer;
+use Mapper\Stdlib\FieldSpecParser;
 use Mapper\Stdlib\MapperConfig;
 use Mapper\Stdlib\PatternParser;
 
@@ -17,7 +17,7 @@ class MapperConfigFactory implements FactoryInterface
             $services->get('Common\EasyMeta'),
             $services->get('Omeka\Logger'),
             $services->get('Mapper\MappingPaths'),
-            $services->get(MapNormalizer::class),
+            $services->get(FieldSpecParser::class),
             $services->get(PatternParser::class)
         );
     }

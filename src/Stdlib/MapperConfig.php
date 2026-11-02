@@ -216,9 +216,9 @@ class MapperConfig
     protected $mappingPaths;
 
     /**
-     * @var MapNormalizer
+     * @var FieldSpecParser
      */
-    protected $mapNormalizer;
+    protected $fieldSpecParser;
 
     /**
      * @var PatternParser
@@ -278,14 +278,14 @@ class MapperConfig
         EasyMeta $easyMeta,
         Logger $logger,
         MappingPaths $mappingPaths,
-        MapNormalizer $mapNormalizer,
+        FieldSpecParser $fieldSpecParser,
         PatternParser $patternParser
     ) {
         $this->api = $api;
         $this->easyMeta = $easyMeta;
         $this->logger = $logger;
         $this->mappingPaths = $mappingPaths;
-        $this->mapNormalizer = $mapNormalizer;
+        $this->fieldSpecParser = $fieldSpecParser;
         $this->patternParser = $patternParser;
     }
 
@@ -705,8 +705,6 @@ class MapperConfig
 
     /**
      * Normalize a list of maps.
-     *
-     * Delegates to MapNormalizer when available.
      */
     public function normalizeMaps(array $maps, array $options = []): array
     {
@@ -731,7 +729,7 @@ class MapperConfig
             // where the form sends only the property term as value but
             // the column header has the full spec.
             if (is_string($index) && preg_match('/[\^@§]/', $index)) {
-                $sourceSpec = $this->mapNormalizer->parseFieldSpec($index);
+                $sourceSpec = $this->fieldSpecParser->parse($index);
                 $normalized = $this->applySourceQualifiers($normalized, $sourceSpec);
             }
 
@@ -782,8 +780,6 @@ class MapperConfig
 
     /**
      * Normalize a single map from various input formats.
-     *
-     * Uses MapNormalizer for the heavy lifting, then converts to legacy format.
      */
     public function normalizeMap($map, array $options = []): array
     {
@@ -1294,9 +1290,6 @@ class MapperConfig
         // Default section is 'maps' when no section header is specified.
         $section = self::SECTION_MAPS;
 
-        // Set default querier for MapNormalizer.
-        $defaultQuerier = null;
-
         foreach ($lines as $line) {
             if (mb_substr($line, 0, 1) === ';') {
                 continue;
@@ -1328,10 +1321,6 @@ class MapperConfig
                         $mapping[$section][$key][] = $map[self::MAP_TO];
                     } else {
                         $mapping[$section][$key] = $map[self::MAP_TO];
-                    }
-                    // Capture querier for later use.
-                    if ($section === self::SECTION_INFO && $key === 'querier') {
-                        $defaultQuerier = $map[self::MAP_TO];
                     }
                 }
             } elseif ($section === self::SECTION_TABLES) {

@@ -2,15 +2,15 @@
 
 namespace Mapper\Service\Stdlib;
 
-use Psr\Container\ContainerInterface;
 use Laminas\ServiceManager\Factory\FactoryInterface;
-use Mapper\Stdlib\MapNormalizer;
+use Mapper\Stdlib\FieldSpecParser;
+use Psr\Container\ContainerInterface;
 
-class MapNormalizerFactory implements FactoryInterface
+class FieldSpecParserFactory implements FactoryInterface
 {
     public function __invoke(ContainerInterface $services, $requestedName, ?array $options = null)
     {
-        return new MapNormalizer(
+        return new FieldSpecParser(
             $services->get('Omeka\ApiManager'),
             $services->get('Common\EasyMeta')
         );
