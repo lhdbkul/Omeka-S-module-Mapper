@@ -218,7 +218,7 @@ trait FilterTrait
                 return basename($stringValue);
 
             case 'capitalize':
-                return ucfirst($stringValue);
+                return mb_strtoupper(mb_substr($stringValue, 0, 1)) . mb_substr($stringValue, 1);
 
             case 'date':
                 try {
@@ -299,7 +299,7 @@ trait FilterTrait
                 $limit = (int) $arga[1];
                 return strlen($delimiter)
                     ? explode($delimiter, $stringValue, $limit)
-                    : str_split($stringValue, $limit);
+                    : mb_str_split($stringValue, max(1, $limit));
 
             case 'striptags':
                 return strip_tags($stringValue);
@@ -311,7 +311,7 @@ trait FilterTrait
                 return $this->processTableReverseFilter($stringValue, $args);
 
             case 'title':
-                return ucwords($stringValue);
+                return preg_replace_callback('~(^|\s)(\p{Ll})~u', fn ($m) => $m[1] . mb_strtoupper($m[2]), $stringValue) ?? $stringValue;
 
             case 'translate':
                 return $this->translator->translate($stringValue);
