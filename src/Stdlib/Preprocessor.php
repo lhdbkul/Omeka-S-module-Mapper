@@ -38,14 +38,9 @@ class Preprocessor
     protected $processXslt;
 
     /**
-     * @var string Base path for module mapping files (data/mapping/).
+     * @var MappingPaths
      */
-    protected $basePath;
-
-    /**
-     * @var string Base path for user mapping files (files/mapping/).
-     */
-    protected $userBasePath;
+    protected $mappingPaths;
 
     /**
      * @var array Supported transformation types by extension.
@@ -58,15 +53,13 @@ class Preprocessor
     public function __construct(
         Logger $logger,
         ProcessXslt $processXslt,
-        ?ApiManager $api = null,
-        ?string $basePath = null,
-        ?string $userBasePath = null
+        MappingPaths $mappingPaths,
+        ?ApiManager $api = null
     ) {
         $this->logger = $logger;
         $this->processXslt = $processXslt;
+        $this->mappingPaths = $mappingPaths;
         $this->api = $api;
-        $this->basePath = $basePath ?? dirname(__DIR__, 2) . '/data/mapping';
-        $this->userBasePath = $userBasePath;
     }
 
     /**
@@ -183,46 +176,16 @@ class Preprocessor
             }
         }
 
-        // Prefixed file reference: "module:ead/transform.xsl".
-        if (mb_substr($reference, 0, 7) === 'module:') {
-            $file = mb_substr($reference, 7);
-            $filepath = $this->basePath . '/' . $file;
-            if (is_file($filepath) && is_readable($filepath)) {
-                return [
-                    'content' => null,
-                    'filepath' => $filepath,
-                    'type' => $this->getTypeFromExtension($filepath),
-                    'source' => 'module',
-                    'reference' => $reference,
-                ];
-            }
-            return null;
-        }
-
-        // Prefixed file reference: "user:custom.xsl".
-        if (mb_substr($reference, 0, 5) === 'user:' && $this->userBasePath) {
-            $file = mb_substr($reference, 5);
-            $filepath = $this->userBasePath . '/' . $file;
-            if (is_file($filepath) && is_readable($filepath)) {
-                return [
-                    'content' => null,
-                    'filepath' => $filepath,
-                    'type' => $this->getTypeFromExtension($filepath),
-                    'source' => 'user',
-                    'reference' => $reference,
-                ];
-            }
-            return null;
-        }
-
-        // Resolve file path (absolute or relative).
-        $filepath = $this->resolvePath($reference, $context);
+        // File reference: "module:ead/transform.xsl", "user:custom.xsl", or
+        // a path, that cannot get out of the mapping directories.
+        $filepath = $this->mappingPaths->resolve($reference, $context);
         if ($filepath) {
+            $prefix = strtok($reference, ':');
             return [
                 'content' => null,
                 'filepath' => $filepath,
                 'type' => $this->getTypeFromExtension($filepath),
-                'source' => 'file',
+                'source' => $prefix === 'module' || $prefix === 'user' ? $prefix : 'file',
                 'reference' => $reference,
             ];
         }
@@ -237,45 +200,6 @@ class Preprocessor
     {
         $extension = strtolower(pathinfo($file, PATHINFO_EXTENSION));
         return self::SUPPORTED_TYPES[$extension] ?? null;
-    }
-
-    /**
-     * Resolve transformation file path.
-     *
-     * Search order:
-     * 1. Absolute path
-     * 2. Relative to context directory (e.g., ead/)
-     * 3. Relative to common/
-     * 4. Relative to base path (data/mapping/)
-     */
-    protected function resolvePath(string $file, ?string $context = null): ?string
-    {
-        // Absolute path.
-        if (strpos($file, '/') === 0 && is_file($file)) {
-            return $file;
-        }
-
-        // Relative to context directory (same folder as mapping).
-        if ($context) {
-            $contextPath = $this->basePath . '/' . $context . '/' . $file;
-            if (is_file($contextPath)) {
-                return $contextPath;
-            }
-        }
-
-        // Relative to common/.
-        $commonPath = $this->basePath . '/common/' . $file;
-        if (is_file($commonPath)) {
-            return $commonPath;
-        }
-
-        // Relative to base path (data/mapping/).
-        $basePath = $this->basePath . '/' . $file;
-        if (is_file($basePath)) {
-            return $basePath;
-        }
-
-        return null;
     }
 
     /**
@@ -337,37 +261,19 @@ class Preprocessor
     }
 
     /**
-     * Set base path for mapping files.
-     */
-    public function setBasePath(string $basePath): self
-    {
-        $this->basePath = $basePath;
-        return $this;
-    }
-
-    /**
-     * Get base path for mapping files.
+     * Get the directory of the module mapping files (data/mapping).
      */
     public function getBasePath(): string
     {
-        return $this->basePath;
+        return $this->mappingPaths->modulePath();
     }
 
     /**
-     * Set user base path for user mapping files.
+     * Get the directory of the user mapping files (files/mapping).
      */
-    public function setUserBasePath(?string $userBasePath): self
+    public function getUserBasePath(): string
     {
-        $this->userBasePath = $userBasePath;
-        return $this;
-    }
-
-    /**
-     * Get user base path for mapping files.
-     */
-    public function getUserBasePath(): ?string
-    {
-        return $this->userBasePath;
+        return $this->mappingPaths->userPath();
     }
 
     /**

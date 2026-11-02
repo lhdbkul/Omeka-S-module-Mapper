@@ -211,9 +211,9 @@ class MapperConfig
     protected $logger;
 
     /**
-     * Base path for user files.
+     * @var MappingPaths
      */
-    protected string $basePath;
+    protected $mappingPaths;
 
     /**
      * @var MapNormalizer
@@ -277,14 +277,14 @@ class MapperConfig
         ApiManager $api,
         EasyMeta $easyMeta,
         Logger $logger,
-        string $basePath,
+        MappingPaths $mappingPaths,
         MapNormalizer $mapNormalizer,
         PatternParser $patternParser
     ) {
         $this->api = $api;
         $this->easyMeta = $easyMeta;
         $this->logger = $logger;
-        $this->basePath = $basePath;
+        $this->mappingPaths = $mappingPaths;
         $this->mapNormalizer = $mapNormalizer;
         $this->patternParser = $patternParser;
     }
@@ -880,24 +880,10 @@ class MapperConfig
             }
         }
 
-        // File reference with prefix.
-        $prefixes = [
-            'user' => $this->basePath . '/mapping/',
-            'module' => dirname(__DIR__, 2) . '/data/mapping/',
-        ];
-
-        $isFileReference = false;
-        if (strpos($reference, ':') !== false) {
-            $prefix = strtok($reference, ':');
-            if (isset($prefixes[$prefix])) {
-                $isFileReference = true;
-                $file = mb_substr($reference, strlen($prefix) + 1);
-                $filepath = $prefixes[$prefix] . $file;
-                if (file_exists($filepath) && is_readable($filepath)) {
-                    return $this->loadFileContent($filepath);
-                }
-                return null;
-            }
+        // File reference with prefix, that cannot get out of its directory.
+        if (strncmp($reference, 'module:', 7) === 0 || strncmp($reference, 'user:', 5) === 0) {
+            $filepath = $this->mappingPaths->resolve($reference);
+            return $filepath ? $this->loadFileContent($filepath) : null;
         }
 
         // Check for raw content (INI or XML).
@@ -912,12 +898,8 @@ class MapperConfig
         }
 
         // Try as module file without prefix.
-        $filepath = $prefixes['module'] . $reference;
-        if (file_exists($filepath) && is_readable($filepath)) {
-            return $this->loadFileContent($filepath);
-        }
-
-        return null;
+        $filepath = $this->mappingPaths->resolve('module:' . $reference);
+        return $filepath ? $this->loadFileContent($filepath) : null;
     }
 
     /**
@@ -927,12 +909,20 @@ class MapperConfig
      */
     protected function loadFileContent(string $filepath)
     {
-        // PHP files are included and must return an array.
+        // PHP files are included and must return an array. Only the files of
+        // the module are trusted.
         if (pathinfo($filepath, PATHINFO_EXTENSION) === 'php') {
+            if (!$this->mappingPaths->isModuleFile($filepath)) {
+                $this->logger->err(
+                    'PHP mapping file "{file}" is allowed only in the module.', // @translate
+                    ['file' => $filepath]
+                );
+                return null;
+            }
             $data = include $filepath;
             if (!is_array($data)) {
                 $this->logger->err(
-                    'PHP mapping file "{file}" must return an array.',
+                    'PHP mapping file "{file}" must return an array.', // @translate
                     ['file' => $filepath]
                 );
                 return null;

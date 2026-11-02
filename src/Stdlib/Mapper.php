@@ -76,6 +76,13 @@ class Mapper
     protected $twigXmlEngine;
 
     /**
+     * Resolver of the Twig-XML templates.
+     *
+     * @var \Mapper\Stdlib\MappingPaths|null
+     */
+    protected $mappingPaths;
+
+    /**
      * @var \Laminas\Mvc\I18n\Translator
      */
     protected $translator;
@@ -148,6 +155,12 @@ class Mapper
     public function setPreprocessor(?Preprocessor $preprocessor): self
     {
         $this->preprocessor = $preprocessor;
+        return $this;
+    }
+
+    public function setMappingPaths(?MappingPaths $mappingPaths): self
+    {
+        $this->mappingPaths = $mappingPaths;
         return $this;
     }
 
@@ -769,38 +782,18 @@ class Mapper
     /**
      * Resolve a Twig-XML template reference to its content.
      *
-     * Supports the same prefixes as the Preprocessor: module:, user:, absolute
-     * path, plain filename relative to the module mapping base or to the given
-     * context folder.
+     * Supports the same references as the Preprocessor: module:, user:, path
+     * inside the mapping directories, or filename relative to the context
+     * folder of the module mapping base.
      */
     protected function loadTwigXmlTemplate(string $reference, ?string $context): ?string
     {
-        $basePath = $this->preprocessor ? $this->preprocessor->getBasePath() : null;
-        $userBasePath = $this->preprocessor ? $this->preprocessor->getUserBasePath() : null;
-
-        $candidates = [];
-        if (strncmp($reference, 'module:', 7) === 0 && $basePath) {
-            $candidates[] = $basePath . '/' . substr($reference, 7);
-        } elseif (strncmp($reference, 'user:', 5) === 0 && $userBasePath) {
-            $candidates[] = $userBasePath . '/' . substr($reference, 5);
-        } elseif (strpos($reference, '/') === 0) {
-            $candidates[] = $reference;
-        } else {
-            if ($basePath) {
-                if ($context) {
-                    $candidates[] = $basePath . '/' . $context . '/' . $reference;
-                }
-                $candidates[] = $basePath . '/common/' . $reference;
-                $candidates[] = $basePath . '/' . $reference;
-            }
+        $filepath = $this->mappingPaths ? $this->mappingPaths->resolve($reference, $context) : null;
+        if (!$filepath) {
+            return null;
         }
-        foreach ($candidates as $path) {
-            if (is_file($path) && is_readable($path)) {
-                $content = @file_get_contents($path);
-                return $content === false ? null : $content;
-            }
-        }
-        return null;
+        $content = file_get_contents($filepath);
+        return $content === false ? null : $content;
     }
 
     /**

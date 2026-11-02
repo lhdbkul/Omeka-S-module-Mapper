@@ -16,7 +16,7 @@ class MapperConfigFactory implements FactoryInterface
             $services->get('Omeka\ApiManager'),
             $services->get('Common\EasyMeta'),
             $services->get('Omeka\Logger'),
-            $services->get('Config')['file_store']['local']['base_path'] ?: (OMEKA_PATH . '/files'),
+            $services->get('Mapper\MappingPaths'),
             $services->get(MapNormalizer::class),
             $services->get(PatternParser::class)
         );

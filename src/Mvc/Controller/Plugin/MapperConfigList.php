@@ -3,6 +3,7 @@
 namespace Mapper\Mvc\Controller\Plugin;
 
 use Laminas\Mvc\Controller\Plugin\AbstractPlugin;
+use Mapper\Stdlib\MappingPaths;
 use Omeka\Api\Manager as ApiManager;
 
 /**
@@ -21,9 +22,9 @@ class MapperConfigList extends AbstractPlugin
     protected $api;
 
     /**
-     * @var string
+     * @var MappingPaths
      */
-    protected $basePath;
+    protected $mappingPaths;
 
     /**
      * @var string
@@ -35,10 +36,10 @@ class MapperConfigList extends AbstractPlugin
      */
     protected $mappingExtension = '';
 
-    public function __construct(ApiManager $api, string $basePath)
+    public function __construct(ApiManager $api, MappingPaths $mappingPaths)
     {
         $this->api = $api;
-        $this->basePath = $basePath;
+        $this->mappingPaths = $mappingPaths;
     }
 
     /**
@@ -98,17 +99,17 @@ class MapperConfigList extends AbstractPlugin
             // Scan all subdirectories for a given extension.
             if ($subDirectory === '*') {
                 $this->mappingExtension = $extension;
-                $subDirectories = $this->getSubDirectories(dirname(__DIR__, 4) . '/data/mapping');
+                $subDirectories = $this->getSubDirectories($this->mappingPaths->modulePath());
                 foreach ($subDirectories as $subDir) {
-                    $this->mappingDirectory = dirname(__DIR__, 4) . '/data/mapping/' . $subDir;
+                    $this->mappingDirectory = $this->mappingPaths->modulePath() . '/' . $subDir;
                     $mappingFiles = $this->getMappingFiles();
                     foreach ($mappingFiles as $file) {
                         $files['module']['options']['module:' . $subDir . '/' . $file] = $subDir . '/' . $file;
                     }
                 }
-                $subDirectories = $this->getSubDirectories($this->basePath . '/mapping');
+                $subDirectories = $this->getSubDirectories($this->mappingPaths->userPath());
                 foreach ($subDirectories as $subDir) {
-                    $this->mappingDirectory = $this->basePath . '/mapping/' . $subDir;
+                    $this->mappingDirectory = $this->mappingPaths->userPath() . '/' . $subDir;
                     $mappingFiles = $this->getMappingFiles();
                     foreach ($mappingFiles as $file) {
                         $files['user']['options']['user:' . $subDir . '/' . $file] = $subDir . '/' . $file;
@@ -120,14 +121,14 @@ class MapperConfigList extends AbstractPlugin
             $this->mappingExtension = $extension;
 
             // Module mapping files.
-            $this->mappingDirectory = dirname(__DIR__, 4) . '/data/mapping/' . $subDirectory;
+            $this->mappingDirectory = $this->mappingPaths->modulePath() . '/' . $subDirectory;
             $mappingFiles = $this->getMappingFiles();
             foreach ($mappingFiles as $file) {
                 $files['module']['options']['module:' . $subDirectory . '/' . $file] = $file;
             }
 
             // User mapping files.
-            $this->mappingDirectory = $this->basePath . '/mapping/' . $subDirectory;
+            $this->mappingDirectory = $this->mappingPaths->userPath() . '/' . $subDirectory;
             $mappingFiles = $this->getMappingFiles();
             foreach ($mappingFiles as $file) {
                 $files['user']['options']['user:' . $subDirectory . '/' . $file] = $file;
@@ -190,18 +191,12 @@ class MapperConfigList extends AbstractPlugin
      */
     public function getMappingFromFile(string $mappingName): ?string
     {
-        $filepath = &$mappingName;
-
-        if (mb_substr($filepath, 0, 5) === 'user:') {
-            $filepath = $this->basePath . '/mapping/' . mb_substr($filepath, 5);
-        } elseif (mb_substr($filepath, 0, 7) === 'module:') {
-            $filepath = dirname(__DIR__, 4) . '/data/mapping/' . mb_substr($filepath, 7);
-        } else {
+        if (strncmp($mappingName, 'user:', 5) !== 0 && strncmp($mappingName, 'module:', 7) !== 0) {
             return null;
         }
 
-        $path = realpath($filepath) ?: null;
-        if (!$path || !is_file($path) || !is_readable($path)) {
+        $path = $this->mappingPaths->resolve($mappingName);
+        if (!$path) {
             return null;
         }
 

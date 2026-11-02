@@ -18,6 +18,7 @@ class MapperFactory implements FactoryInterface
             $services->get('MvcTranslator')
         );
         $mapper->setPreprocessor($services->get('Mapper\Preprocessor'));
+        $mapper->setMappingPaths($services->get('Mapper\MappingPaths'));
         $mapper->setTwigXmlEngine($services->get('Mapper\TwigXmlEngine'));
         return $mapper;
     }

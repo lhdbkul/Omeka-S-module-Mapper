@@ -13,6 +13,7 @@
             <file>tests/MapperTest/Stdlib/FilterTraitTest.php</file>
             <file>tests/MapperTest/Stdlib/PatternParserTest.php</file>
             <file>tests/MapperTest/Stdlib/TwigXmlEngineTest.php</file>
+            <file>tests/MapperTest/Stdlib/MappingPathsTest.php</file>
         </testsuite>
         <!-- MapperConfig tests (core functionality) -->
         <testsuite name="config">

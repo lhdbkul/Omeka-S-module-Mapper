@@ -12,7 +12,7 @@ class MapperConfigListFactory implements FactoryInterface
     {
         return new MapperConfigList(
             $services->get('Omeka\ApiManager'),
-            $services->get('Config')['file_store']['local']['base_path'] ?: (OMEKA_PATH . '/files')
+            $services->get('Mapper\MappingPaths')
         );
     }
 }
