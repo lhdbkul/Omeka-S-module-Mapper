@@ -2,20 +2,15 @@
 
 namespace Mapper\Form\Element;
 
-use Mapper\Stdlib\MapperConfig;
+use Mapper\Mvc\Controller\Plugin\MapperConfigList;
 use Omeka\Form\Element\AbstractGroupByOwnerSelect;
 
 class MapperSelect extends AbstractGroupByOwnerSelect
 {
     /**
-     * @var string
+     * @var MapperConfigList
      */
-    protected $basePath;
-
-    /**
-     * @var MapperConfig
-     */
-    protected $mapperConfig;
+    protected $mapperConfigList;
 
     public function getResourceName()
     {
@@ -27,26 +22,10 @@ class MapperSelect extends AbstractGroupByOwnerSelect
         return $resource->label();
     }
 
-    public function setBasePath(string $basePath): self
+    public function setMapperConfigList(MapperConfigList $mapperConfigList): self
     {
-        $this->basePath = $basePath;
+        $this->mapperConfigList = $mapperConfigList;
         return $this;
-    }
-
-    public function getBasePath(): ?string
-    {
-        return $this->basePath;
-    }
-
-    public function setMapperConfig(MapperConfig $mapperConfig): self
-    {
-        $this->mapperConfig = $mapperConfig;
-        return $this;
-    }
-
-    public function getMapperConfig(): ?MapperConfig
-    {
-        return $this->mapperConfig;
     }
 
     public function getValueOptions(): array
@@ -89,76 +68,20 @@ class MapperSelect extends AbstractGroupByOwnerSelect
     }
 
     /**
-     * Get mappings stored as files in the data/mapping directory.
+     * Get the mappings stored as files in the module and in files/mapping.
      *
      * @return array Associative array of file reference => label.
      */
     protected function getFileMappings(): array
     {
-        $mappingDir = dirname(__DIR__, 3) . '/data/mapping';
-        if (!is_dir($mappingDir)) {
+        if (!$this->mapperConfigList) {
             return [];
         }
-
-        $mappings = [];
-        $subdirs = ['xml', 'base', 'json'];
-
-        foreach ($subdirs as $subdir) {
-            $dir = $mappingDir . '/' . $subdir;
-            if (!is_dir($dir)) {
-                continue;
-            }
-
-            $files = scandir($dir);
-            foreach ($files as $file) {
-                if ($file === '.' || $file === '..') {
-                    continue;
-                }
-
-                $ext = pathinfo($file, PATHINFO_EXTENSION);
-                if (!in_array($ext, ['xml', 'ini'])) {
-                    continue;
-                }
-
-                $name = pathinfo($file, PATHINFO_FILENAME);
-                // Use module: prefix to identify file-based mappings.
-                $reference = 'module:' . $subdir . '/' . $file;
-
-                // Try to get label from mapping info section.
-                $label = $this->getMappingLabel($reference);
-                if (!$label) {
-                    // Fallback: create a readable label from the filename.
-                    $label = ucfirst(strtr($name, ['_' => ' ', '-' => ' ', '.' => ' ']));
-                }
-                $label .= ' (' . $subdir . '/' . $ext . ')';
-
-                $mappings[$reference] = $label;
-            }
-        }
-
-        asort($mappings);
-
-        return $mappings;
-    }
-
-    /**
-     * Get the label from a mapping file info section.
-     */
-    protected function getMappingLabel(string $reference): ?string
-    {
-        if (!$this->mapperConfig) {
-            return null;
-        }
-
-        try {
-            $mapping = $this->mapperConfig->__invoke(null, $reference);
-            if ($mapping && !empty($mapping['info']['label'])) {
-                return $mapping['info']['label'];
-            }
-        } catch (\Throwable $e) {
-            // Ignore errors, fallback to filename.
-        }
-
-        return null;
+        $list = $this->mapperConfigList->listMappings([
+            ['*' => 'ini'],
+            ['*' => 'xml'],
+            ['*' => 'json'],
+        ]);
+        return $list['user']['options'] + $list['module']['options'];
     }
 }

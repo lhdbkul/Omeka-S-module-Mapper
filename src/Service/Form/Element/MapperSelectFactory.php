@@ -12,7 +12,7 @@ class MapperSelectFactory implements FactoryInterface
     {
         $element = new MapperSelect(null, $options ?? []);
         $element
-            ->setMapperConfig($services->get('Mapper\MapperConfig'))
+            ->setMapperConfigList($services->get('ControllerPluginManager')->get('mapperConfigList'))
             ->setApiManager($services->get('Omeka\ApiManager'));
         return $element;
     }
