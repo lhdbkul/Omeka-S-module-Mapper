@@ -297,19 +297,6 @@ class PatternParser
     }
 
     /**
-     * Check if a single-brace expr is inside a double-brace expr.
-     */
-    protected function isInsideDoubleBrace(string $singleBrace, array $doubleBraceMatches): bool
-    {
-        foreach ($doubleBraceMatches as $doubleBrace) {
-            if (mb_strpos($doubleBrace, $singleBrace) !== false) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /**
      * Check if a double-brace expr contains single-brace replacements.
      *
      * Example: {{ {path}|filter }} has single-brace inside.

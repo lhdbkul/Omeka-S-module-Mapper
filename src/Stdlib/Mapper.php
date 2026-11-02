@@ -1907,18 +1907,6 @@ class Mapper
             }
         }
 
-        // Deduplicate early, but revert to keep the last value, that overrides
-        // previous ones.
-        /*
-        if (count($resource[$field]) > 1) {
-            if (gettype(reset($resource[$field])) === 'array') {
-                $resource[$field] = array_values(array_intersect_key($resource[$field], array_unique(array_map('serialize', $resource[$field]))));
-            } else {
-                $resource[$field] = array_unique($resource[$field]);
-            }
-        }
-         */
-
         return filter_var($string, FILTER_VALIDATE_URL)
             ? ['type' => 'uri', '@id' => $string]
             : ['type' => 'literal', '@value' => $string];

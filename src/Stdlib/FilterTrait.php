@@ -41,8 +41,8 @@ trait FilterTrait
      *   filter for export mappings (lower → upper, dateRevert → dateRevert).
      * - category: domain grouping for documentation and UI.
      *
-     * Used by Mapper::serializeValue() and tooling to validate that an export
-     * mapping does not silently rely on lossy filters in strict mode.
+     * It may be used by tooling to check that an export mapping does not rely
+     * on lossy filters.
      */
     public static function filterMetadata(): array
     {
